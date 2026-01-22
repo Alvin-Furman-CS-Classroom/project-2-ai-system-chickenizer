@@ -6,13 +6,13 @@ Provide a concise system overview (200-300 words). Explain the unifying theme an
 
 ## Team
 
-- Member 1
-- Member 2
-- Member 3 (if applicable)
+- Greyson Henry
+- Will Zoeller
 
 ## Proposal
 
 Link to the approved Project 1 proposal (or paste a short summary here).
+See here https://github.com/Alvin-Furman-CS-Classroom/project-1-proposal-cptareb/blob/main/README.md
 
 ## Module Plan
 
