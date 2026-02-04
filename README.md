@@ -197,6 +197,8 @@ Keep `AGENTS.md` updated with your module plan, constraints, and links to APIs/d
   - Documentation: https://nashpy.readthedocs.io/
 - **numpy**: Fundamental package for scientific computing with Python
   - Documentation: https://numpy.org/doc/
+- **sympy**: Symbol objects for propositional logic
+  - Documentation: https://docs.sympy.org/
 - **matplotlib**: Comprehensive library for creating static, animated, and interactive visualizations
   - Documentation: https://matplotlib.org/
 - **seaborn**: Statistical data visualization library built on matplotlib
