@@ -14,7 +14,7 @@ class KnowledgeBase:
         #symbol set that grows parallel to the clauses list
         self.symbols = set[sp.Symbol]()
 
-        #CNF knowledge base
+        #CNF knowledge base, "AND of ORs" rather than "OR of ANDs"
         self.kb = sp.And() 
 
     def rebuild_kb(self):
@@ -41,6 +41,17 @@ class KnowledgeBase:
     def validate_kb(self):
         return sp.satisfiable(self.kb)
 
+    def entails(self, query):
+        return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
+    
+    def is_cnf(self):
+        #rules of CNF: each clause is OR of literals, top level is AND of clauses
+        return all(isinstance(clause, sp.Or) for clause in self.clauses)
+    
+    def to_cnf(self):
+        self.kb = sp.to_cnf(self.kb)
+        self.clauses = [clause for clause in self.kb.args]
+
     def render_kb(self):
         output = ""
         for clause in self.clauses:
@@ -57,7 +68,6 @@ class ChickenKB(KnowledgeBase):
         super().__init__()
         #preadding the "p1_stays" symbol to the knowledge base, since we operate under worst-case scenario assumptions
         #This is a placeholder--across multiple rounds, we'd want p1 to be able to change their aggression
-        self.add_symbol(sp.Symbol("p1_stays"))
 
 def main():
     our_kb = ChickenKB()
@@ -71,6 +81,11 @@ def main():
     our_kb.add_clause(sp.Equivalent(grudge, p2_stays))
     our_kb.add_clause(sp.Implies(sp.Not(p1_stays), sp.Not(grudge)))
     our_kb.add_clause(sp.Equivalent(sp.Not(p2_stays), p2_swerves))
+
+    print("Entailment", our_kb.entails(sp.Not(p1_stays)))
+    print("Is CNF", our_kb.is_cnf())
+    print("CNF", our_kb.to_cnf())
+    print("Is CNF now?", our_kb.is_cnf())
     our_kb.render_kb()
     print(our_kb.validate_kb())
 
