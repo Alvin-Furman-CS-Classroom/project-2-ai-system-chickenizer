@@ -15,14 +15,23 @@ class KnowledgeBase:
         #CNF knowledge base, "AND of ORs" rather than "OR of ANDs"
         self.kb = sp.And() 
 
+    """tell:
+    Adds clauses to knowledge base.
+    """
     def tell(self, clauses:list[sp.Expr]):
         self.clauses.extend(clauses)
         self.clauses_for_rendering.extend(clauses)
         self.rebuild_kb()
     
+    """ask:
+    Checks if knowledge base entails a given query.
+    """
     def ask(self, query:sp.Expr):
         return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
 
+    """rebuild_kb:
+    Rebuilds knowledge base from the clauses.
+    """
     def rebuild_kb(self):
         if not self.clauses:
             self.kb = sp.And()
@@ -32,14 +41,23 @@ class KnowledgeBase:
     def validate_kb(self):
         return sp.satisfiable(self.kb)
 
+    """is_cnf:
+    Checks if knowledge base is in CNF (Conjunctive Normal Form).
+    """
     def is_cnf(self):
         #rules of CNF: each clause is OR of literals, top level is AND of clauses
         return all(isinstance(clause, sp.Or) for clause in self.clauses)
     
+    """to_cnf:
+    Converts knowledge base to CNF.
+    """
     def to_cnf(self):
         self.kb = sp.to_cnf(self.kb)
         self.clauses = [clause for clause in self.kb.args]
 
+    """render_kb:
+    Renders knowledge base as a string.
+    """
     def render_kb(self):
         output = ""
         for clause in self.clauses_for_rendering:
@@ -66,8 +84,10 @@ def main():
     p2_swerves = sp.Symbol("p2_swerves")
     
     our_kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
-    print("Does KB entail p2_swerves?", our_kb.entails(p2_swerves))
+    print("Does KB entail p2_swerves?", our_kb.ask(p2_swerves))
     our_kb.render_kb()
+
+    # old statements, from before ask/tell paradigm
     # our_kb.add_clause(sp.Implies(p1_stays, grudge))
     # our_kb.add_clause(sp.Equivalent(grudge, p2_stays))
     # our_kb.add_clause(sp.Implies(sp.Not(p1_stays), sp.Not(grudge)))
