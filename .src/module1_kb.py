@@ -12,41 +12,26 @@ class KnowledgeBase:
         self.clauses = []
         self.clauses_for_rendering = []
 
-        #symbol set that grows parallel to the clauses list
-        self.symbols = set[sp.Symbol]()
-
         #CNF knowledge base, "AND of ORs" rather than "OR of ANDs"
         self.kb = sp.And() 
+
+    def tell(self, clauses:list[sp.Expr]):
+        self.clauses.extend(clauses)
+        self.clauses_for_rendering.extend(clauses)
+        self.rebuild_kb()
+    
+    def ask(self, query:sp.Expr):
+        return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
 
     def rebuild_kb(self):
         if not self.clauses:
             self.kb = sp.And()
         else:
             self.kb = sp.And(*self.clauses)
-
-    def add_symbol(self, symbol):
-        self.symbols.add(symbol)
-        self.clauses_for_rendering.append(symbol)
-        self.clauses.append(symbol)
-        self.rebuild_kb()
-
-    def add_clause(self, clause):
-        self.clauses.append(clause)
-        self.clauses_for_rendering.append(clause)
-        self.rebuild_kb()
-
-    def add_clauses(self, clauses):
-
-        #note: might be useful to build strategies
-        self.clauses.extend(clauses)
-        self.rebuild_kb()
     
     def validate_kb(self):
         return sp.satisfiable(self.kb)
 
-    def entails(self, query):
-        return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
-    
     def is_cnf(self):
         #rules of CNF: each clause is OR of literals, top level is AND of clauses
         return all(isinstance(clause, sp.Or) for clause in self.clauses)
@@ -80,8 +65,7 @@ def main():
     # p2_stays = sp.Symbol("p2_stays")
     p2_swerves = sp.Symbol("p2_swerves")
     
-    our_kb.add_symbol(p1_stays)
-    our_kb.add_clause(sp.Implies(p1_stays, p2_swerves))
+    our_kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
     print("Does KB entail p2_swerves?", our_kb.entails(p2_swerves))
     our_kb.render_kb()
     # our_kb.add_clause(sp.Implies(p1_stays, grudge))
