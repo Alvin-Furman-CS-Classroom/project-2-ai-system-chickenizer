@@ -2,12 +2,12 @@
 Unit tests for Module 1: Knowledge Base and ChickenKB classes.
 
 Tests cover:
-- Basic KB operations (add_symbol, add_clause, add_clauses)
+- Basic KB operations (tell, ask)
 - KB validation (satisfiability)
 - KB rendering
 - Edge cases and error handling
 - ChickenKB-specific functionality for strategy and outcome representation
-- Future functionality (entailment, inference, CNF validation)
+- Essential functionality (entailment, CNF conversion, inference)
 """
 
 import pytest
@@ -30,100 +30,99 @@ class TestKnowledgeBase:
     """Test cases for the base KnowledgeBase class."""
     
     def test_initialization(self):
-        """Test that KB initializes with empty clauses and symbols."""
+        """Test that KB initializes with empty clauses."""
         kb = KnowledgeBase()
         assert kb.clauses == []
-        assert kb.symbols == set()
+        assert kb.clauses_for_rendering == []
         assert kb.kb == sp.And()
     
-    def test_add_symbol(self):
-        """Test adding a symbol to the KB."""
+    def test_tell_single_clause(self):
+        """Test telling a single clause to the KB."""
         kb = KnowledgeBase()
         symbol = sp.Symbol("test_symbol")
-        kb.add_symbol(symbol)
+        kb.tell([symbol])
         
-        assert symbol in kb.symbols
         assert symbol in kb.clauses
+        assert symbol in kb.clauses_for_rendering
         assert len(kb.clauses) == 1
     
-    def test_add_multiple_symbols(self):
-        """Test adding multiple symbols."""
+    def test_tell_multiple_clauses(self):
+        """Test telling multiple clauses at once."""
         kb = KnowledgeBase()
         s1 = sp.Symbol("s1")
         s2 = sp.Symbol("s2")
         s3 = sp.Symbol("s3")
         
-        kb.add_symbol(s1)
-        kb.add_symbol(s2)
-        kb.add_symbol(s3)
+        kb.tell([s1, s2, s3])
         
-        assert len(kb.symbols) == 3
         assert len(kb.clauses) == 3
-        assert s1 in kb.symbols and s1 in kb.clauses
-        assert s2 in kb.symbols and s2 in kb.clauses
-        assert s3 in kb.symbols and s3 in kb.clauses
+        assert len(kb.clauses_for_rendering) == 3
+        assert s1 in kb.clauses and s1 in kb.clauses_for_rendering
+        assert s2 in kb.clauses and s2 in kb.clauses_for_rendering
+        assert s3 in kb.clauses and s3 in kb.clauses_for_rendering
     
-    def test_add_clause_implication(self):
-        """Test adding an implication clause."""
+    def test_tell_implication(self):
+        """Test telling an implication clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         clause = sp.Implies(p, q)
         
-        kb.add_clause(clause)
+        kb.tell([clause])
         
         assert clause in kb.clauses
+        assert clause in kb.clauses_for_rendering
         assert len(kb.clauses) == 1
     
-    def test_add_clause_equivalent(self):
-        """Test adding an equivalence clause."""
+    def test_tell_equivalent(self):
+        """Test telling an equivalence clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         clause = sp.Equivalent(p, q)
         
-        kb.add_clause(clause)
+        kb.tell([clause])
         
         assert clause in kb.clauses
         assert len(kb.clauses) == 1
     
-    def test_add_clause_negation(self):
-        """Test adding a negation clause."""
+    def test_tell_negation(self):
+        """Test telling a negation clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         clause = sp.Not(p)
         
-        kb.add_clause(clause)
+        kb.tell([clause])
         
         assert clause in kb.clauses
         assert len(kb.clauses) == 1
     
-    def test_add_clause_and(self):
-        """Test adding an AND clause."""
+    def test_tell_and(self):
+        """Test telling an AND clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         clause = sp.And(p, q)
         
-        kb.add_clause(clause)
+        kb.tell([clause])
         
         assert clause in kb.clauses
         assert len(kb.clauses) == 1
     
-    def test_add_clause_or(self):
-        """Test adding an OR clause."""
+    def test_tell_or(self):
+        """Test telling an OR clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         clause = sp.Or(p, q)
         
-        kb.add_clause(clause)
+        kb.tell([clause])
         
         assert clause in kb.clauses
         assert len(kb.clauses) == 1
     
-    def test_add_clauses_list(self):
-        """Test adding multiple clauses at once."""
+    def test_tell_multiple_clauses_list(self):
+        """Test telling multiple clauses at once."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
@@ -135,7 +134,7 @@ class TestKnowledgeBase:
             sp.Or(p, r)
         ]
         
-        kb.add_clauses(clauses)
+        kb.tell(clauses)
         
         assert len(kb.clauses) == 3
         assert all(clause in kb.clauses for clause in clauses)
@@ -150,7 +149,7 @@ class TestKnowledgeBase:
         """Test rebuilding KB with one clause."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
-        kb.add_clause(p)
+        kb.tell([p])
         assert kb.kb == sp.And(p)
     
     def test_rebuild_kb_multiple_clauses(self):
@@ -158,15 +157,14 @@ class TestKnowledgeBase:
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
-        kb.add_clause(p)
-        kb.add_clause(q)
+        kb.tell([p, q])
         assert kb.kb == sp.And(p, q)
     
     def test_validate_kb_satisfiable_simple(self):
         """Test validation of a satisfiable KB."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
-        kb.add_clause(p)
+        kb.tell([p])
         
         result = kb.validate_kb()
         assert result is not False  # Should return a model or True
@@ -178,9 +176,7 @@ class TestKnowledgeBase:
         q = sp.Symbol("q")
         r = sp.Symbol("r")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q), sp.Implies(q, r), p])
         
         result = kb.validate_kb()
         assert result is not False
@@ -189,8 +185,7 @@ class TestKnowledgeBase:
         """Test validation of an unsatisfiable KB with direct contradiction."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
-        kb.add_clause(p)
-        kb.add_clause(sp.Not(p))
+        kb.tell([p, sp.Not(p)])
         
         result = kb.validate_kb()
         assert result is False
@@ -201,9 +196,7 @@ class TestKnowledgeBase:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(p)
-        kb.add_clause(sp.Not(q))
+        kb.tell([sp.Implies(p, q), p, sp.Not(q)])
         
         result = kb.validate_kb()
         assert result is False
@@ -221,8 +214,7 @@ class TestKnowledgeBase:
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
-        kb.add_clause(p)
-        kb.add_clause(q)
+        kb.tell([p, q])
         
         kb.render_kb()
         captured = capsys.readouterr()
@@ -235,7 +227,7 @@ class TestKnowledgeBase:
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
-        kb.add_clause(sp.Implies(p, q))
+        kb.tell([sp.Implies(p, q)])
         
         kb.render_kb()
         captured = capsys.readouterr()
@@ -249,7 +241,7 @@ class TestKnowledgeBase:
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
-        kb.add_clause(sp.Equivalent(p, q))
+        kb.tell([sp.Equivalent(p, q)])
         
         kb.render_kb()
         captured = capsys.readouterr()
@@ -265,9 +257,7 @@ class TestKnowledgeBase:
         q = sp.Symbol("q")
         r = sp.Symbol("r")
         
-        kb.add_clause(p)
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Equivalent(q, r))
+        kb.tell([p, sp.Implies(p, q), sp.Equivalent(q, r)])
         
         kb.render_kb()
         captured = capsys.readouterr()
@@ -276,29 +266,21 @@ class TestKnowledgeBase:
         assert "->" in output
         assert "<=>" in output
     
-    def test_add_symbol_rebuilds_kb(self):
-        """Test that add_symbol automatically rebuilds KB."""
-        kb = KnowledgeBase()
-        p = sp.Symbol("p")
-        kb.add_symbol(p)
-        assert kb.kb == sp.And(p)
-    
-    def test_add_clause_rebuilds_kb(self):
-        """Test that add_clause automatically rebuilds KB."""
+    def test_tell_rebuilds_kb(self):
+        """Test that tell automatically rebuilds KB."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         clause = sp.Implies(p, q)
-        kb.add_clause(clause)
+        kb.tell([clause])
         assert kb.kb == sp.And(clause)
     
-    def test_add_clauses_rebuilds_kb(self):
-        """Test that add_clauses automatically rebuilds KB."""
+    def test_tell_multiple_rebuilds_kb(self):
+        """Test that tell with multiple clauses automatically rebuilds KB."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
-        clauses = [p, q]
-        kb.add_clauses(clauses)
+        kb.tell([p, q])
         assert kb.kb == sp.And(p, q)
     
     def test_complex_logical_formula(self):
@@ -309,9 +291,7 @@ class TestKnowledgeBase:
         r = sp.Symbol("r")
         
         # Complex formula: (p -> q) AND (q -> r) AND (p OR r)
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(sp.Or(p, r))
+        kb.tell([sp.Implies(p, q), sp.Implies(q, r), sp.Or(p, r)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -323,9 +303,7 @@ class TestKnowledgeBase:
         q = sp.Symbol("q")
         
         # p XOR q = (p -> ~q) AND (q -> ~p) AND (p OR q)
-        kb.add_clause(sp.Implies(p, sp.Not(q)))
-        kb.add_clause(sp.Implies(q, sp.Not(p)))
-        kb.add_clause(sp.Or(p, q))
+        kb.tell([sp.Implies(p, sp.Not(q)), sp.Implies(q, sp.Not(p)), sp.Or(p, q)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -335,12 +313,10 @@ class TestChickenKB:
     """Test cases for the ChickenKB class, focused on strategy and outcome representation."""
     
     def test_initialization(self):
-        """Test that ChickenKB initializes with p1_stays symbol."""
+        """Test that ChickenKB initializes as empty KB."""
         kb = ChickenKB()
-        assert len(kb.clauses) == 1
-        assert len(kb.symbols) == 1
-        assert sp.Symbol("p1_stays") in kb.symbols
-        assert sp.Symbol("p1_stays") in kb.clauses
+        assert len(kb.clauses) == 0
+        assert len(kb.clauses_for_rendering) == 0
     
     def test_strategy_grudge_representation(self):
         """Test representing a grudge strategy: if opponent stays, I stay."""
@@ -351,8 +327,7 @@ class TestChickenKB:
         
         # Grudge strategy: if p1 stays, then grudge is true
         # If grudge is true, then p2 stays
-        kb.add_clause(sp.Implies(p1_stays, grudge))
-        kb.add_clause(sp.Equivalent(grudge, p2_stays))
+        kb.tell([sp.Implies(p1_stays, grudge), sp.Equivalent(grudge, p2_stays)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -367,8 +342,7 @@ class TestChickenKB:
         
         # Tit-for-tat: p1's action matches p2's previous action
         # This is simplified - in full implementation would track previous round
-        kb.add_clause(sp.Equivalent(p1_stays, p2_stays))
-        kb.add_clause(sp.Equivalent(p1_swerves, p2_swerves))
+        kb.tell([sp.Equivalent(p1_stays, p2_stays), sp.Equivalent(p1_swerves, p2_swerves)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -379,7 +353,7 @@ class TestChickenKB:
         p1_swerves = sp.Symbol("p1_swerves")
         
         # Always swerve: p1_swerves is always true
-        kb.add_clause(p1_swerves)
+        kb.tell([p1_swerves])
         
         result = kb.validate_kb()
         assert result is not False
@@ -389,8 +363,8 @@ class TestChickenKB:
         kb = ChickenKB()
         p1_stays = sp.Symbol("p1_stays")
         
-        # Always stay: p1_stays is always true (already in KB)
-        # This should be consistent
+        # Always stay: p1_stays is always true
+        kb.tell([p1_stays])
         result = kb.validate_kb()
         assert result is not False
     
@@ -402,7 +376,7 @@ class TestChickenKB:
         collision = sp.Symbol("collision")
         
         # Collision occurs when both stay
-        kb.add_clause(sp.Equivalent(collision, sp.And(p1_stays, p2_stays)))
+        kb.tell([sp.Equivalent(collision, sp.And(p1_stays, p2_stays))])
         
         result = kb.validate_kb()
         assert result is not False
@@ -417,8 +391,7 @@ class TestChickenKB:
         mutual_cooperation = sp.Symbol("mutual_cooperation")
         
         # Mutual cooperation: both swerve
-        kb.add_clause(sp.Equivalent(mutual_cooperation, 
-                                    sp.And(p1_swerves, p2_swerves)))
+        kb.tell([sp.Equivalent(mutual_cooperation, sp.And(p1_swerves, p2_swerves))])
         
         result = kb.validate_kb()
         assert result is not False
@@ -430,8 +403,8 @@ class TestChickenKB:
         p1_swerves = sp.Symbol("p1_swerves")
         
         # A player cannot both stay and swerve
-        kb.add_clause(sp.Implies(p1_stays, sp.Not(p1_swerves)))
-        kb.add_clause(sp.Implies(p1_swerves, sp.Not(p1_stays)))
+        kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
+        kb.tell([sp.Implies(p1_swerves, sp.Not(p1_stays))])
         
         result = kb.validate_kb()
         assert result is not False
@@ -443,7 +416,7 @@ class TestChickenKB:
         p1_swerves = sp.Symbol("p1_swerves")
         
         # A player must choose one action
-        kb.add_clause(sp.Or(p1_stays, p1_swerves))
+        kb.tell([sp.Or(p1_stays, p1_swerves)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -456,7 +429,7 @@ class TestChickenKB:
         p1_swerves = sp.Symbol("p1_swerves")
         
         # Conditional: if p2 stays, then p1 swerves (chicken out)
-        kb.add_clause(sp.Implies(p2_stays, p1_swerves))
+        kb.tell([sp.Implies(p2_stays, p1_swerves)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -470,8 +443,8 @@ class TestChickenKB:
         p2_swerves = sp.Symbol("p2_swerves")
         
         # Escalation: match opponent's action
-        kb.add_clause(sp.Implies(p2_stays, p1_stays))
-        kb.add_clause(sp.Implies(p2_swerves, p1_swerves))
+        kb.tell([sp.Implies(p2_stays, p1_stays)])
+        kb.tell([sp.Implies(p2_swerves, p1_swerves)])
         
         result = kb.validate_kb()
         assert result is not False
@@ -487,9 +460,9 @@ class TestChickenKB:
         p2_wins = sp.Symbol("p2_wins")
         
         # p1 wins if p1 stays and p2 swerves
-        kb.add_clause(sp.Equivalent(p1_wins, sp.And(p1_stays, p2_swerves)))
+        kb.tell([sp.Equivalent(p1_wins, sp.And(p1_stays, p2_swerves))])
         # p2 wins if p2 stays and p1 swerves
-        kb.add_clause(sp.Equivalent(p2_wins, sp.And(p2_stays, p1_swerves)))
+        kb.tell([sp.Equivalent(p2_wins, sp.And(p2_stays, p1_swerves))])
         
         result = kb.validate_kb()
         assert result is not False
@@ -501,9 +474,9 @@ class TestChickenKB:
         p1_swerves = sp.Symbol("p1_swerves")
         
         # Contradictory: p1 both stays and swerves
-        kb.add_clause(p1_stays)
-        kb.add_clause(p1_swerves)
-        kb.add_clause(sp.Implies(p1_stays, sp.Not(p1_swerves)))
+        kb.tell([p1_stays])
+        kb.tell([p1_swerves])
+        kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
         
         result = kb.validate_kb()
         assert result is False
@@ -519,11 +492,11 @@ class TestChickenKB:
         collision = sp.Symbol("collision")
         
         # Multiple strategy rules
-        kb.add_clause(sp.Implies(p1_stays, grudge))
-        kb.add_clause(sp.Equivalent(grudge, p2_stays))
-        kb.add_clause(sp.Equivalent(collision, sp.And(p1_stays, p2_stays)))
-        kb.add_clause(sp.Implies(p1_stays, sp.Not(p1_swerves)))
-        kb.add_clause(sp.Implies(p2_stays, sp.Not(p2_swerves)))
+        kb.tell([sp.Implies(p1_stays, grudge)])
+        kb.tell([sp.Equivalent(grudge, p2_stays)])
+        kb.tell([sp.Equivalent(collision, sp.And(p1_stays, p2_stays))])
+        kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
+        kb.tell([sp.Implies(p2_stays, sp.Not(p2_swerves))])
         
         result = kb.validate_kb()
         assert result is not False
@@ -535,8 +508,8 @@ class TestChickenKB:
         grudge = sp.Symbol("grudge")
         p2_stays = sp.Symbol("p2_stays")
         
-        kb.add_clause(sp.Implies(p1_stays, grudge))
-        kb.add_clause(sp.Equivalent(grudge, p2_stays))
+        kb.tell([sp.Implies(p1_stays, grudge)])
+        kb.tell([sp.Equivalent(grudge, p2_stays)])
         
         kb.render_kb()
         captured = capsys.readouterr()
@@ -563,17 +536,11 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([p])
         
-        # KB should entail q
-        # Test by checking if KB U {~q} is unsatisfiable
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(q))
-        test_kb.rebuild_kb()
-        
-        assert test_kb.validate_kb() is False  # KB entails q
+        # KB should entail q - use ask() method
+        assert kb.ask(q) is True  # KB entails q
     
     def test_entailment_checking_chain(self):
         """Test entailment through logical chain: (p -> q), (q -> r), p entails r."""
@@ -582,17 +549,12 @@ class TestEssentialKBFunctionality:
         q = sp.Symbol("q")
         r = sp.Symbol("r")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([sp.Implies(q, r)])
+        kb.tell([p])
         
-        # KB should entail r
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(r))
-        test_kb.rebuild_kb()
-        
-        assert test_kb.validate_kb() is False  # KB entails r
+        # KB should entail r - use ask() method
+        assert kb.ask(r) is True  # KB entails r
     
     def test_entailment_checking_does_not_entail(self):
         """Test that KB does not entail a query when it shouldn't."""
@@ -600,33 +562,20 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(p)
+        kb.tell([p])
         # KB does not contain q, so should not entail q
-        
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(q))
-        test_kb.rebuild_kb()
-        
-        assert test_kb.validate_kb() is not False  # KB does not entail q
+        assert kb.ask(q) is False  # KB does not entail q
     
     def test_entailment_interface(self):
-        """Test that KB should have an entails() method for querying."""
+        """Test that KB has an ask() method for querying."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q), p])
         
-        # Future: kb.entails(q) should return True
-        # This test documents the expected interface
-        # For now, manually verify using satisfiability
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(q))
-        test_kb.rebuild_kb()
-        assert test_kb.validate_kb() is False
+        # Use ask() method for entailment checking
+        assert kb.ask(q) is True
     
     def test_cnf_conversion_implication(self):
         """Test that implications should be convertible to CNF: (p -> q) = (~p OR q)."""
@@ -634,19 +583,19 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
+        kb.tell([sp.Implies(p, q)])
         
         # Future: kb.to_cnf() should convert (p -> q) to (~p OR q)
         # CNF form of (p -> q) is (~p OR q)
         cnf_clause = sp.Or(sp.Not(p), q)
         cnf_kb = KnowledgeBase()
-        cnf_kb.add_clause(cnf_clause)
+        cnf_kb.tell([cnf_clause])
         
         # Both should be logically equivalent
         # Test by checking if KB U {~cnf} is unsatisfiable
         test_kb = KnowledgeBase()
         test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(cnf_clause))
+        test_kb.tell([sp.Not(cnf_clause)])
         test_kb.rebuild_kb()
         
         # If original KB entails CNF form, then they're equivalent
@@ -659,23 +608,23 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Equivalent(p, q))
+        kb.tell([sp.Equivalent(p, q)])
         
         # CNF form of (p <-> q) is (~p OR q) AND (p OR ~q)
         cnf_kb = KnowledgeBase()
-        cnf_kb.add_clause(sp.Or(sp.Not(p), q))
-        cnf_kb.add_clause(sp.Or(p, sp.Not(q)))
+        cnf_kb.tell([sp.Or(sp.Not(p), q)])
+        cnf_kb.tell([sp.Or(p, sp.Not(q))])
         
         # Both should be logically equivalent
         # Test by checking mutual entailment
         test1 = KnowledgeBase()
         test1.clauses = kb.clauses.copy()
-        test1.add_clause(sp.Not(sp.And(sp.Or(sp.Not(p), q), sp.Or(p, sp.Not(q)))))
+        test1.tell([sp.Not(sp.And(sp.Or(sp.Not(p), q), sp.Or(p, sp.Not(q))))])
         test1.rebuild_kb()
         
         test2 = KnowledgeBase()
         test2.clauses = cnf_kb.clauses.copy()
-        test2.add_clause(sp.Not(sp.Equivalent(p, q)))
+        test2.tell([sp.Not(sp.Equivalent(p, q))])
         test2.rebuild_kb()
         
         # Both should be unsatisfiable if equivalent
@@ -690,9 +639,9 @@ class TestEssentialKBFunctionality:
         r = sp.Symbol("r")
         
         # Add clauses that are already in CNF (disjunctions of literals)
-        kb.add_clause(sp.Or(p, q))
-        kb.add_clause(sp.Or(sp.Not(p), r))
-        kb.add_clause(sp.Or(q, sp.Not(r)))
+        kb.tell([sp.Or(p, q)])
+        kb.tell([sp.Or(sp.Not(p), r)])
+        kb.tell([sp.Or(q, sp.Not(r))])
         
         # Future: kb.is_cnf() should return True
         # For now, verify these are valid CNF clauses
@@ -705,7 +654,7 @@ class TestEssentialKBFunctionality:
         q = sp.Symbol("q")
         
         # Add clause that is NOT in CNF (has nested AND)
-        kb.add_clause(sp.And(p, q))
+        kb.tell([sp.And(p, q)])
         
         # Future: kb.is_cnf() should return False
         # For now, verify the clause exists
@@ -720,16 +669,16 @@ class TestEssentialKBFunctionality:
         r = sp.Symbol("r")
         
         # KB: (p OR q), (~p OR r)
-        kb.add_clause(sp.Or(p, q))
-        kb.add_clause(sp.Or(sp.Not(p), r))
+        kb.tell([sp.Or(p, q)])
+        kb.tell([sp.Or(sp.Not(p), r)])
         
         # Resolution should infer (q OR r)
         # Future: kb.resolve() should return [q OR r]
         # Verify that (q OR r) is entailed
         test_kb = KnowledgeBase()
         test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(sp.Or(q, r)))  # Add ~(q OR r) = (~q AND ~r)
-        test_kb.add_clause(sp.And(sp.Not(q), sp.Not(r)))
+        test_kb.tell([sp.Not(sp.Or(q, r))])  # Add ~(q OR r) = (~q AND ~r)
+        test_kb.tell([sp.And(sp.Not(q), sp.Not(r))])
         test_kb.rebuild_kb()
         
         # If KB entails (q OR r), then KB U {~(q OR r)} is unsatisfiable
@@ -745,20 +694,15 @@ class TestEssentialKBFunctionality:
         
         # Rules: p -> q, q -> r, r -> s
         # Facts: p
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(sp.Implies(r, s))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([sp.Implies(q, r)])
+        kb.tell([sp.Implies(r, s)])
+        kb.tell([p])
         
         # Forward chaining should infer: q, then r, then s
         # Future: kb.forward_chain() should return [q, r, s]
-        # Verify that s is entailed
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(s))
-        test_kb.rebuild_kb()
-        
-        assert test_kb.validate_kb() is False  # KB entails s
+        # Verify that s is entailed using ask()
+        assert kb.ask(s) is True  # KB entails s
     
     def test_backward_chaining(self):
         """Test backward chaining inference method."""
@@ -769,19 +713,14 @@ class TestEssentialKBFunctionality:
         
         # Rules: p -> q, q -> r
         # Goal: prove r
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([sp.Implies(q, r)])
+        kb.tell([p])
         
         # Backward chaining: to prove r, need q; to prove q, need p; p is given
         # Future: kb.backward_chain(r) should return True
-        # Verify that r is entailed
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(r))
-        test_kb.rebuild_kb()
-        
-        assert test_kb.validate_kb() is False  # KB entails r
+        # Verify that r is entailed using ask()
+        assert kb.ask(r) is True  # KB entails r
     
     def test_infer_logical_consequences(self):
         """Test inferring all logical consequences from KB."""
@@ -790,32 +729,23 @@ class TestEssentialKBFunctionality:
         q = sp.Symbol("q")
         r = sp.Symbol("r")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([sp.Implies(q, r)])
+        kb.tell([p])
         
         # Future: kb.infer_consequences() should return all entailed facts
         # Should include: q, r, and potentially others depending on implementation
-        # For now, verify that q and r are both entailed
-        test_q = KnowledgeBase()
-        test_q.clauses = kb.clauses.copy()
-        test_q.add_clause(sp.Not(q))
-        test_q.rebuild_kb()
-        assert test_q.validate_kb() is False
-        
-        test_r = KnowledgeBase()
-        test_r.clauses = kb.clauses.copy()
-        test_r.add_clause(sp.Not(r))
-        test_r.rebuild_kb()
-        assert test_r.validate_kb() is False
+        # For now, verify that q and r are both entailed using ask()
+        assert kb.ask(q) is True
+        assert kb.ask(r) is True
     
     def test_conflict_reporting_direct_contradiction(self):
         """Test that KB should report which clauses conflict when inconsistent."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         
-        kb.add_clause(p)
-        kb.add_clause(sp.Not(p))
+        kb.tell([p])
+        kb.tell([sp.Not(p)])
         
         # Future: kb.validate_kb() should return (False, conflict_report)
         # conflict_report should identify that p and ~p conflict
@@ -829,9 +759,9 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(p)
-        kb.add_clause(sp.Not(q))
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([p])
+        kb.tell([sp.Not(q)])
         
         # Future: conflict_report should identify the chain: p -> q, p, ~q
         # For now, verify it's unsatisfiable
@@ -844,10 +774,10 @@ class TestEssentialKBFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(p)
-        kb.add_clause(sp.Not(p))
-        kb.add_clause(q)
-        kb.add_clause(sp.Not(q))
+        kb.tell([p])
+        kb.tell([sp.Not(p)])
+        kb.tell([q])
+        kb.tell([sp.Not(q)])
         
         # Future: conflict_report should identify both conflicts
         # For now, verify it's unsatisfiable
@@ -862,23 +792,15 @@ class TestEssentialKBFunctionality:
         p2_stays = sp.Symbol("p2_stays")
         
         # Strategy rules
-        kb.add_clause(sp.Implies(p1_stays, grudge))
-        kb.add_clause(sp.Equivalent(grudge, p2_stays))
+        kb.tell([p1_stays])  # Add p1_stays as a fact
+        kb.tell([sp.Implies(p1_stays, grudge)])
+        kb.tell([sp.Equivalent(grudge, p2_stays)])
         
         # Since p1_stays is in KB, should be able to infer grudge and p2_stays
         # Future: kb.infer_strategy_consequences() should return [grudge, p2_stays]
-        # Verify entailment
-        test_grudge = KnowledgeBase()
-        test_grudge.clauses = kb.clauses.copy()
-        test_grudge.add_clause(sp.Not(grudge))
-        test_grudge.rebuild_kb()
-        assert test_grudge.validate_kb() is False
-        
-        test_p2 = KnowledgeBase()
-        test_p2.clauses = kb.clauses.copy()
-        test_p2.add_clause(sp.Not(p2_stays))
-        test_p2.rebuild_kb()
-        assert test_p2.validate_kb() is False
+        # Verify entailment using ask() method
+        assert kb.ask(grudge) is True
+        assert kb.ask(p2_stays) is True
     
     def test_cnf_output_format(self):
         """Test that KB output should be in CNF format as specified in proposal."""
@@ -887,18 +809,18 @@ class TestEssentialKBFunctionality:
         q = sp.Symbol("q")
         
         # Add non-CNF clause
-        kb.add_clause(sp.Implies(p, q))
+        kb.tell([sp.Implies(p, q)])
         
         # Future: kb.get_cnf() should return KB in CNF format
         # CNF of (p -> q) is (~p OR q)
         # For now, verify we can construct the CNF equivalent
         cnf_kb = KnowledgeBase()
-        cnf_kb.add_clause(sp.Or(sp.Not(p), q))
+        cnf_kb.tell([sp.Or(sp.Not(p), q)])
         
         # Both should be logically equivalent
         test_kb = KnowledgeBase()
         test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(sp.Or(sp.Not(p), q)))
+        test_kb.tell([sp.Not(sp.Or(sp.Not(p), q))])
         test_kb.rebuild_kb()
         assert test_kb.validate_kb() is False
 
@@ -913,20 +835,12 @@ class TestFutureFunctionality:
         q = sp.Symbol("q")
         r = sp.Symbol("r")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(sp.Implies(q, r))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([sp.Implies(q, r)])
+        kb.tell([p])
         
-        # Future: kb.entails(r) should return True
-        # For now, we can manually check by adding ~r and checking satisfiability
-        test_kb = KnowledgeBase()
-        test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(sp.Not(r))
-        test_kb.rebuild_kb()
-        
-        # If KB with ~r is unsatisfiable, then KB entails r
-        is_unsatisfiable = test_kb.validate_kb() is False
-        assert is_unsatisfiable  # KB should entail r
+        # Use ask() method for entailment checking
+        assert kb.ask(r) is True  # KB should entail r
     
     def test_cnf_conversion(self):
         """Test that KB maintains CNF structure (future functionality)."""
@@ -936,8 +850,8 @@ class TestFutureFunctionality:
         r = sp.Symbol("r")
         
         # Add clauses that should be in CNF
-        kb.add_clause(sp.Or(p, q))  # Already CNF
-        kb.add_clause(sp.Or(sp.Not(p), r))  # Already CNF
+        kb.tell([sp.Or(p, q)])  # Already CNF
+        kb.tell([sp.Or(sp.Not(p), r)])  # Already CNF
         
         # Future: kb.to_cnf() should convert to CNF
         # For now, verify clauses are added correctly
@@ -951,8 +865,8 @@ class TestFutureFunctionality:
         r = sp.Symbol("r")
         
         # KB: (p OR q), (~p OR r)
-        kb.add_clause(sp.Or(p, q))
-        kb.add_clause(sp.Or(sp.Not(p), r))
+        kb.tell([sp.Or(p, q)])
+        kb.tell([sp.Or(sp.Not(p), r)])
         
         # Future: kb.resolve() should infer (q OR r)
         # For now, verify KB is satisfiable
@@ -965,14 +879,14 @@ class TestFutureFunctionality:
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         
-        kb.add_clause(sp.Implies(p, q))
-        kb.add_clause(p)
+        kb.tell([sp.Implies(p, q)])
+        kb.tell([p])
         
         # Future: kb.query(q) should return True
         # For now, verify KB is consistent with q
         test_kb = KnowledgeBase()
         test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(q)
+        test_kb.tell([q])
         test_kb.rebuild_kb()
         
         result = test_kb.validate_kb()
@@ -986,7 +900,7 @@ class TestFutureFunctionality:
         p2_stays = sp.Symbol("p2_stays")
         
         # Strategy: if p2 stays, then p1 swerves
-        kb.add_clause(sp.Implies(p2_stays, p1_swerves))
+        kb.tell([sp.Implies(p2_stays, p1_swerves)])
         
         # Future: kb.is_strategy_consistent() should check for contradictions
         # For now, verify satisfiability
@@ -1001,15 +915,15 @@ class TestFutureFunctionality:
         collision = sp.Symbol("collision")
         
         # Define collision outcome
-        kb.add_clause(sp.Equivalent(collision, sp.And(p1_stays, p2_stays)))
+        kb.tell([sp.Equivalent(collision, sp.And(p1_stays, p2_stays))])
         
         # Future: kb.predict_outcome(p1_stays=True, p2_stays=True) should return collision=True
         # For now, verify the relationship is encoded
         test_kb = ChickenKB()
         test_kb.clauses = kb.clauses.copy()
-        test_kb.add_clause(p1_stays)
-        test_kb.add_clause(p2_stays)
-        test_kb.add_clause(collision)
+        test_kb.tell([p1_stays])
+        test_kb.tell([p2_stays])
+        test_kb.tell([collision])
         test_kb.rebuild_kb()
         
         result = test_kb.validate_kb()
@@ -1024,11 +938,11 @@ class TestFutureFunctionality:
         p2_stays = sp.Symbol("p2_stays")
         
         # Strategy 1: always stay
-        # (p1_stays already in KB)
+        kb1.tell([p1_stays])
         
         # Strategy 2: conditional - if p2 stays, then p1 swerves
         p1_swerves = sp.Symbol("p1_swerves")
-        kb2.add_clause(sp.Implies(p2_stays, p1_swerves))
+        kb2.tell([sp.Implies(p2_stays, p1_swerves)])
         
         # Future: kb1.compare(kb2) should identify differences
         # For now, verify both are valid
