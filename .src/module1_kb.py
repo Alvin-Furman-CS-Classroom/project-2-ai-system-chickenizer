@@ -72,8 +72,17 @@ class KnowledgeBase:
 class ChickenKB(KnowledgeBase):
     def __init__(self):
         super().__init__()
+        rnd_history = {}
+        rnd = 0
         #preadding the "p1_stays" symbol to the knowledge base, since we operate under worst-case scenario assumptions
         #This is a placeholder--across multiple rounds, we'd want p1 to be able to change their aggression
+    
+    def reset_kb(self):
+        self.clauses = []
+        self.clauses_for_rendering = []
+        self.kb = sp.And()
+        self.rnd = 0
+        round_history = {}
 
 def main():
     our_kb = ChickenKB()
