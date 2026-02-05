@@ -10,6 +10,7 @@ class KnowledgeBase:
 
     def __init__(self):
         self.clauses = []
+        self.clauses_for_rendering = []
 
         #symbol set that grows parallel to the clauses list
         self.symbols = set[sp.Symbol]()
@@ -25,11 +26,13 @@ class KnowledgeBase:
 
     def add_symbol(self, symbol):
         self.symbols.add(symbol)
+        self.clauses_for_rendering.append(symbol)
         self.clauses.append(symbol)
         self.rebuild_kb()
 
     def add_clause(self, clause):
         self.clauses.append(clause)
+        self.clauses_for_rendering.append(clause)
         self.rebuild_kb()
 
     def add_clauses(self, clauses):
@@ -54,7 +57,7 @@ class KnowledgeBase:
 
     def render_kb(self):
         output = ""
-        for clause in self.clauses:
+        for clause in self.clauses_for_rendering:
             if type(clause) == sp.Implies:
                 output = output + str(clause.args[0]) + " -> " + str(clause.args[1]) + ", "
             elif type(clause) == sp.Equivalent:
@@ -73,21 +76,26 @@ def main():
     our_kb = ChickenKB()
     # Create symbols for all the variables we'll use
     p1_stays = sp.Symbol("p1_stays")
-    grudge = sp.Symbol("grudge")
-    p2_stays = sp.Symbol("p2_stays")
+    # grudge = sp.Symbol("grudge")
+    # p2_stays = sp.Symbol("p2_stays")
     p2_swerves = sp.Symbol("p2_swerves")
     
-    our_kb.add_clause(sp.Implies(p1_stays, grudge))
-    our_kb.add_clause(sp.Equivalent(grudge, p2_stays))
-    our_kb.add_clause(sp.Implies(sp.Not(p1_stays), sp.Not(grudge)))
-    our_kb.add_clause(sp.Equivalent(sp.Not(p2_stays), p2_swerves))
-
-    print("Entailment", our_kb.entails(sp.Not(p1_stays)))
-    print("Is CNF", our_kb.is_cnf())
-    print("CNF", our_kb.to_cnf())
-    print("Is CNF now?", our_kb.is_cnf())
+    our_kb.add_symbol(p1_stays)
+    our_kb.add_clause(sp.Implies(p1_stays, p2_swerves))
+    print("Does KB entail p2_swerves?", our_kb.entails(p2_swerves))
     our_kb.render_kb()
-    print(our_kb.validate_kb())
+    # our_kb.add_clause(sp.Implies(p1_stays, grudge))
+    # our_kb.add_clause(sp.Equivalent(grudge, p2_stays))
+    # our_kb.add_clause(sp.Implies(sp.Not(p1_stays), sp.Not(grudge)))
+    # our_kb.add_clause(sp.Equivalent(sp.Not(p2_stays), p2_swerves))
+
+    # print("Entailment", our_kb.entails(sp.Not(p1_stays)))
+    # print("Is CNF", our_kb.is_cnf())
+    # our_kb.render_kb()
+    # print("CNF", our_kb.to_cnf())
+    # print("Is CNF now?", our_kb.is_cnf())
+    # our_kb.render_kb()
+    # print(our_kb.validate_kb())
 
 if __name__ == "__main__":
     main()
