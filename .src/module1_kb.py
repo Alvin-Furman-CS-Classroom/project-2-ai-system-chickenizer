@@ -66,20 +66,8 @@ def main():
     p2_swerves = sp.Symbol("p2_swerves")
     
     our_kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
-    print("Does KB entail p2_swerves?", our_kb.entails(p2_swerves))
+    print("Does KB entail p2_swerves?", our_kb.ask(p2_swerves))
     our_kb.render_kb()
-    # our_kb.add_clause(sp.Implies(p1_stays, grudge))
-    # our_kb.add_clause(sp.Equivalent(grudge, p2_stays))
-    # our_kb.add_clause(sp.Implies(sp.Not(p1_stays), sp.Not(grudge)))
-    # our_kb.add_clause(sp.Equivalent(sp.Not(p2_stays), p2_swerves))
-
-    # print("Entailment", our_kb.entails(sp.Not(p1_stays)))
-    # print("Is CNF", our_kb.is_cnf())
-    # our_kb.render_kb()
-    # print("CNF", our_kb.to_cnf())
-    # print("Is CNF now?", our_kb.is_cnf())
-    # our_kb.render_kb()
-    # print(our_kb.validate_kb())
 
 if __name__ == "__main__":
     main()
