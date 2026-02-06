@@ -62,13 +62,71 @@ class KnowledgeBase:
         output = ""
         for clause in self.clauses_for_rendering:
             if type(clause) == sp.Implies:
-                output = output + str(clause.args[0]) + " -> " + str(clause.args[1]) + ", "
+                output = output + "(" + str(clause.args[0]) + " -> " + str(clause.args[1]) + "), "
             elif type(clause) == sp.Equivalent:
-                output = output + str(clause.args[0]) + " <=> " + str(clause.args[1]) + ", "
+                output = output + "(" + str(clause.args[0]) + " <=> " + str(clause.args[1]) + "), "
             else:
                 output = output + str(clause) + ", "
-        print(output[:-2])
-    
+        print(output[:-2].strip())
+
+    """forward_chain:
+    # Forward chains the knowledge base to entailed facts.
+    """
+    def forward_chain(self, query:sp.Expr):
+        path = []
+        facts = self.clauses.copy()
+        if query in facts: 
+            # print("query in facts:", query)
+            return [query]
+
+        new_facts_added = True
+        while new_facts_added:
+            new_facts_added = False
+            for clause in self.clauses:
+                # print("clause:", clause)
+                if len(clause.args) != 0:
+                    if not clause.args[0] in facts:
+                        continue
+                    if clause.args[-1] in facts:
+                        continue
+
+                    new_facts_added = True
+                    facts.append(clause.args[-1])
+                    path.append(clause)
+                    if clause.args[-1] == query:
+                        # print("query found in clause:", clause)
+                        return path
+        return []
+
+    """backward_chain: 
+    Backward chains the knowledge base to the query.
+    """
+    def backward_chain(self, query:sp.Expr, visited=None):
+        if visited == None:
+            visited = set()
+
+        
+        if query in visited:
+            # print("query already visited:", query)
+            return []
+
+        visited.add(query)
+        
+        # Base case
+        if query in self.clauses:
+            # print("query in clauses:", query)
+            return [query]
+
+        for clause in self.clauses:
+            if len(clause.args) != 0:
+                if clause.args[-1] == query:
+                    recur_path = self.backward_chain(clause.args[0], visited)
+                    # print("recur_path:", recur_path)
+                    if recur_path != []:
+                        # print("recur_path + [clause, query]:", recur_path + [clause, query])
+                        return recur_path + [clause]#, query]
+        return []
+        
 class ChickenKB(KnowledgeBase):
     def __init__(self):
         super().__init__()
@@ -83,6 +141,21 @@ class ChickenKB(KnowledgeBase):
         self.kb = sp.And()
         self.rnd = 0
         round_history = {}
+
+
+def render_path(path:list[sp.Expr], forward:bool = True) -> str:
+    output = ""
+    if forward: delimiter = " => "
+    else: delimiter = " <= "
+    for clause in path: 
+        if type(clause) == sp.Implies:
+            output = output + "(" + str(clause.args[0]) + " -> " + str(clause.args[1]) + ")" + delimiter        
+        elif type(clause) == sp.Equivalent:
+            output = output + "(" + str(clause.args[0]) + " <=> " + str(clause.args[1]) + ")" + delimiter
+        
+        else:
+            output = output + str(clause) + delimiter
+    return output[:-len(delimiter)].strip()
 
 def main():
     our_kb = ChickenKB()
@@ -109,6 +182,10 @@ def main():
     # print("Is CNF now?", our_kb.is_cnf())
     # our_kb.render_kb()
     # print(our_kb.validate_kb())
+
+    # test forward and backward chaining
+    print("Forward chaining:", render_path((our_kb.forward_chain(p2_swerves)), " => "))
+    print("Backward chaining:", render_path((our_kb.backward_chain(p2_swerves)), " <= "))
 
 if __name__ == "__main__":
     main()
