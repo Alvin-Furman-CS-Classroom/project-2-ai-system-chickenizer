@@ -24,6 +24,7 @@ spec.loader.exec_module(module1_kb)
 
 KnowledgeBase = module1_kb.KnowledgeBase
 ChickenKB = module1_kb.ChickenKB
+render_path = module1_kb.render_path
 
 
 class TestKnowledgeBase:
@@ -948,6 +949,69 @@ class TestFutureFunctionality:
         # For now, verify both are valid
         assert kb1.validate_kb() is not False
         assert kb2.validate_kb() is not False
+
+
+class TestForwardBackwardChaining:
+    """Test cases for forward_chain and backward_chain methods (assumes correct implementation)."""
+
+    def test_chain_simple_implication(self):
+        """Test forward chaining: p1_stays -> p2_swerves, given p1_stays, query p2_swerves."""
+        kb = ChickenKB()
+        p1_stays = sp.Symbol("p1_stays")
+        p2_swerves = sp.Symbol("p2_swerves")
+        kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
+
+        assert render_path(kb.forward_chain(p2_swerves)) == "(p1_stays -> p2_swerves)"
+        assert render_path(kb.backward_chain(p2_swerves), False) == "p1_stays <= (p1_stays -> p2_swerves)"
+
+    def test_chain_of_implications(self):
+        """Test forward chaining: p1_stays -> grudge -> p2_stays, given p1_stays, query p2_stays."""
+        kb = ChickenKB()
+        p1_stays = sp.Symbol("p1_stays")
+        p2_stays = sp.Symbol("p2_stays")
+        grudge = sp.Symbol("grudge")
+        kb.tell([p1_stays, sp.Implies(p1_stays, grudge), sp.Implies(grudge, p2_stays)])
+
+        assert render_path(kb.forward_chain(p2_stays)) == "(p1_stays -> grudge) => (grudge -> p2_stays)"
+        assert render_path(kb.backward_chain(p2_stays), False) == "p1_stays <= (p1_stays -> grudge) <= (grudge -> p2_stays)"
+
+    def test_chain_query_is_direct_fact(self):
+        """Test forward/backward chaining when query is a direct fact in the KB."""
+        kb = ChickenKB()
+        p1_stays = sp.Symbol("p1_stays")
+        kb.tell([p1_stays])
+
+        assert render_path(kb.forward_chain(p1_stays)) == "p1_stays"
+        assert render_path(kb.backward_chain(p1_stays), False) == "p1_stays"
+
+    def test_chain_query_not_derivable(self):
+        """Test forward/backward chaining when query is not derivable (rules only, no facts)."""
+        kb = ChickenKB()
+        p1_stays = sp.Symbol("p1_stays")
+        p2_swerves = sp.Symbol("p2_swerves")
+        collision = sp.Symbol("collision")
+        kb.tell([sp.Implies(p1_stays, p2_swerves), sp.Implies(p2_swerves, collision)])
+
+        assert render_path(kb.forward_chain(collision)) == ""
+        assert render_path(kb.backward_chain(collision), False) == ""
+
+    #  currently trying to construct, will fix later
+    # def test_chain_chicken_game_scenario(self):
+    #     """Test forward/backward chaining with chicken game: p1_stays -> p2_swerves."""
+    #     kb = ChickenKB()
+    #     p1_stays = sp.Symbol("p1_stays")
+    #     p2_swerves = sp.Symbol("p2_swerves")
+    #     collision = sp.Symbol("collision")
+
+    #     # some standard chicken game rules
+    #     kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
+    #     kb.tell([sp.Implies(sp.And(p1_stays, p2_stays), collision)])
+    #     kb.tell([sp.Implies(collision, grudge)])
+    #     kb.tell([sp.Implies(grudge, p2_stays)])
+    #     kb.render_kb()
+
+    #     assert render_path(kb.forward_chain(p2_swerves)) == "(p1_stays -> p2_swerves)"
+    #     assert render_path(kb.backward_chain(p2_swerves), False) == "p1_stays <= (p1_stays -> p2_swerves)"
 
 
 if __name__ == "__main__":
