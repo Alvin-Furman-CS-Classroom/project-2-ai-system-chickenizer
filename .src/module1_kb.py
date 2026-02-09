@@ -18,7 +18,7 @@ class KnowledgeBase:
     """tell:
     Adds clauses to knowledge base.
     """
-    def tell(self, clauses:list[sp.Expr]):
+    def tell(self, clauses:list[sp.Expr]) -> None:
         self.clauses.extend(clauses)
         self.clauses_for_rendering.extend(clauses)
         self.rebuild_kb()
@@ -26,39 +26,39 @@ class KnowledgeBase:
     """ask:
     Checks if knowledge base entails a given query.
     """
-    def ask(self, query:sp.Expr):
+    def ask(self, query:sp.Expr) -> bool:
         return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
 
     """rebuild_kb:
     Rebuilds knowledge base from the clauses.
     """
-    def rebuild_kb(self):
+    def rebuild_kb(self) -> None:
         if not self.clauses:
             self.kb = sp.And()
         else:
             self.kb = sp.And(*self.clauses)
     
-    def validate_kb(self):
+    def validate_kb(self) -> bool:
         return sp.satisfiable(self.kb)
 
     """is_cnf:
     Checks if knowledge base is in CNF (Conjunctive Normal Form).
     """
-    def is_cnf(self):
+    def is_cnf(self) -> bool:
         #rules of CNF: each clause is OR of literals, top level is AND of clauses
         return all(isinstance(clause, sp.Or) for clause in self.clauses)
     
     """to_cnf:
     Converts knowledge base to CNF.
     """
-    def to_cnf(self):
+    def to_cnf(self) -> None:
         self.kb = sp.to_cnf(self.kb)
         self.clauses = [clause for clause in self.kb.args]
 
     """render_kb:
     Renders knowledge base as a string.
     """
-    def render_kb(self):
+    def render_kb(self) -> None:
         output = ""
         for clause in self.clauses_for_rendering:
             if type(clause) == sp.Implies:
@@ -72,7 +72,7 @@ class KnowledgeBase:
     """forward_chain:
     # Forward chains the knowledge base to entailed facts.
     """
-    def forward_chain(self, query:sp.Expr):
+    def forward_chain(self, query:sp.Expr) -> list[sp.Expr]:
         path = []
         facts = self.clauses.copy()
         if query in facts: 
@@ -101,7 +101,7 @@ class KnowledgeBase:
     """backward_chain: 
     Backward chains the knowledge base to the query.
     """
-    def backward_chain(self, query:sp.Expr, visited=None):
+    def backward_chain(self, query:sp.Expr, visited=None) -> list[sp.Expr]:
         if visited == None:
             visited = set()
 
@@ -135,14 +135,17 @@ class ChickenKB(KnowledgeBase):
         #preadding the "p1_stays" symbol to the knowledge base, since we operate under worst-case scenario assumptions
         #This is a placeholder--across multiple rounds, we'd want p1 to be able to change their aggression
     
-    def reset_kb(self):
+    def reset_kb(self) -> None:
         self.clauses = []
         self.clauses_for_rendering = []
         self.kb = sp.And()
         self.rnd = 0
         round_history = {}
 
-
+"""render_path:
+    Renders a path of clauses as a string.
+    Mainly used for testing Forward and Backward Chaining.
+"""
 def render_path(path:list[sp.Expr], forward:bool = True) -> str:
     output = ""
     if forward: delimiter = " => "
@@ -156,6 +159,7 @@ def render_path(path:list[sp.Expr], forward:bool = True) -> str:
         else:
             output = output + str(clause) + delimiter
     return output[:-len(delimiter)].strip()
+
 
 def main():
     our_kb = ChickenKB()
@@ -184,8 +188,8 @@ def main():
     # print(our_kb.validate_kb())
 
     # test forward and backward chaining
-    print("Forward chaining:", render_path((our_kb.forward_chain(p2_swerves)), " => "))
-    print("Backward chaining:", render_path((our_kb.backward_chain(p2_swerves)), " <= "))
+    print("Forward chaining:", render_path((our_kb.forward_chain(p2_swerves))))
+    print("Backward chaining:", render_path((our_kb.backward_chain(p2_swerves)), False))
 
 if __name__ == "__main__":
-    main()
+    main()  
