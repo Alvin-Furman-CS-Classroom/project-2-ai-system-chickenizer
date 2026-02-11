@@ -42,7 +42,7 @@ Module 1 is **complete and aligned with the README specification**. It provides 
 **Findings:**
 
 - Aligned with the refreshed [Code Elegance Report](checkpoint_1_elegance_report.md): average elegance score maps to **3** on the 0–4 scale → **5/7** here.
-- Strengths: Clear method names, focused functions, shared `__clause_to_str` helper, type hints, list + `join()` for rendering, proper docstrings.
+- Strengths: Clear method names, focused functions, shared `_clause_to_str` helper, type hints, list + `join()` for rendering, proper docstrings.
 - Minor: One block of commented-out code remains in `main()` (optional to remove).
 
 ---
