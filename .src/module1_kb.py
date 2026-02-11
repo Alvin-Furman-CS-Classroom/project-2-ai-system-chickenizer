@@ -6,7 +6,7 @@ for encoding game strategies and outcomes in propositional logic.
 """
 
 # Dependencies:
-from typing import Any
+# from typing import Any
 import sympy as sp
 
 
@@ -70,12 +70,12 @@ class KnowledgeBase:
         return sp.satisfiable(self.kb)
 
     def is_cnf(self) -> bool:
-        """Check if  knowledge base is in CNF (Conjunctive Normal Form).
+        """Check if knowledge base is in CNF (Conjunctive Normal Form).
 
         Returns:
-            True if every clause is an sp.And, False otherwise.
+            True if every clause is an sp.Or, False otherwise.
         """
--        #rules of CNF: each clause is OR of literals, top level is AND of clauses
+        #rules of CNF: each clause is OR of literals, top level is AND of clauses
         return all(isinstance(clause, sp.Or) for clause in self.clauses)
 
     def to_cnf(self) -> None:
@@ -88,22 +88,15 @@ class KnowledgeBase:
         self.kb = sp.to_cnf(self.kb)
         self.clauses = [clause for clause in self.kb.args]
 
-    def render_kb(self) -> None:
-        """Render the knowledge base as a human-readable string and print it.
+    def render_kb(self) -> str:
+        """Render the knowledge base as a human-readable string.
 
         Returns:
-            None.
+            A string representation of the knowledge base.
         """
 
-        output = ""
-        for clause in self.clauses_for_rendering:
-            if type(clause) == sp.Implies:
-                output = output + "(" + str(clause.args[0]) + " -> " + str(clause.args[1]) + "), "
-            elif type(clause) == sp.Equivalent:
-                output = output + "(" + str(clause.args[0]) + " <=> " + str(clause.args[1]) + "), "
-            else:
-                output = output + str(clause) + ", "
-        print(output[:-2].strip())
+        pieces = [_clause_to_str(c) for c in self.clauses_for_rendering]
+        return ", ".join(pieces)
 
     def forward_chain(self, query: sp.Expr) -> list[sp.Expr]:
         """Forward chain from known facts to derive the query if possible.
@@ -165,10 +158,11 @@ class KnowledgeBase:
             if len(clause.args) != 0:
                 if clause.args[-1] == query:
                     recur_path = self.backward_chain(clause.args[0], visited)
-                    if recur_path != []:
+                    if recur_path:
                         return recur_path + [clause]
 
         return []
+        
         
 class ChickenKB(KnowledgeBase):
     """Knowledge base specialized for the Chicken game (strategy rules and outcomes)."""
@@ -177,8 +171,8 @@ class ChickenKB(KnowledgeBase):
         """Initialize an empty Chicken KB (extends KnowledgeBase)."""
 
         super().__init__()
-        rnd_history = {}
-        rnd = 0
+        self.rnd_history = {}
+        self.rnd = 0
         #preadding the "p1_stays" symbol to the knowledge base, since we operate under worst-case scenario assumptions
         #This is a placeholder--across multiple rounds, we'd want p1 to be able to change their aggression
 
@@ -193,7 +187,16 @@ class ChickenKB(KnowledgeBase):
         self.clauses_for_rendering = []
         self.kb = sp.And()
         self.rnd = 0
-        round_history = {}
+        self.rnd_history = {}
+
+def _clause_to_str(clause: sp.Expr) -> str:
+    """Format a single clause for display (Implies as 'a -> b', Equivalent as 'a <=> b', else str)."""
+    if isinstance(clause, sp.Implies):
+        return f"({clause.args[0]} -> {clause.args[1]})"
+    if isinstance(clause, sp.Equivalent):
+        return f"({clause.args[0]} <=> {clause.args[1]})"
+    return str(clause)
+
 
 def render_path(path: list[sp.Expr], forward: bool = True) -> str:
     """Render a path of clauses as a single string (e.g. for forward/backward chain output).
@@ -205,24 +208,14 @@ def render_path(path: list[sp.Expr], forward: bool = True) -> str:
     Returns:
         A string representation of the path with the chosen delimiter.
     """
-
-    output = ""
-    if forward: delimiter = " => "
-    else: delimiter = " <= "
-    for clause in path: 
-        if type(clause) == sp.Implies:
-            output = output + "(" + str(clause.args[0]) + " -> " + str(clause.args[1]) + ")" + delimiter        
-        elif type(clause) == sp.Equivalent:
-            output = output + "(" + str(clause.args[0]) + " <=> " + str(clause.args[1]) + ")" + delimiter
-        
-        else:
-            output = output + str(clause) + delimiter
-    return output[:-len(delimiter)].strip()
+    delimiter = " => " if forward else " <= "
+    pieces = [_clause_to_str(c) for c in path]
+    return delimiter.join(pieces)
 
 
 def main() -> None:
     """Run a short demo: build a Chicken KB, check entailment, render KB and chain paths."""
-    
+
     our_kb = ChickenKB()
     # Create symbols for all the variables we'll use
     p1_stays = sp.Symbol("p1_stays")
@@ -232,7 +225,7 @@ def main() -> None:
     
     our_kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
     print("Does KB entail p2_swerves?", our_kb.ask(p2_swerves))
-    our_kb.render_kb()
+    print(our_kb.render_kb())
 
     # old statements, from before ask/tell paradigm
     # our_kb.add_clause(sp.Implies(p1_stays, grudge))

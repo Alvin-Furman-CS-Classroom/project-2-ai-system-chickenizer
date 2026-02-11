@@ -202,70 +202,44 @@ class TestKnowledgeBase:
         result = kb.validate_kb()
         assert result is False
     
-    def test_render_kb_empty(self, capsys):
+    def test_render_kb_empty(self):
         """Test rendering an empty KB."""
         kb = KnowledgeBase()
-        kb.render_kb()
-        captured = capsys.readouterr()
-        # Empty KB should print nothing or empty string
-        assert captured.out == "" or captured.out.strip() == ""
+        assert kb.render_kb() == ""
     
-    def test_render_kb_symbols(self, capsys):
+    def test_render_kb_symbols(self):
         """Test rendering KB with symbols."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         kb.tell([p, q])
-        
-        kb.render_kb()
-        captured = capsys.readouterr()
-        output = captured.out.strip()
-        assert "p" in output
-        assert "q" in output
+        assert kb.render_kb() == "p, q"
     
-    def test_render_kb_implications(self, capsys):
+    def test_render_kb_implications(self):
         """Test rendering KB with implications."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         kb.tell([sp.Implies(p, q)])
-        
-        kb.render_kb()
-        captured = capsys.readouterr()
-        output = captured.out.strip()
-        assert "->" in output
-        assert "p" in output
-        assert "q" in output
+        assert kb.render_kb() == "(p -> q)"
     
-    def test_render_kb_equivalences(self, capsys):
+    def test_render_kb_equivalences(self):
         """Test rendering KB with equivalences."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         kb.tell([sp.Equivalent(p, q)])
-        
-        kb.render_kb()
-        captured = capsys.readouterr()
-        output = captured.out.strip()
-        assert "<=>" in output
-        assert "p" in output
-        assert "q" in output
+        assert kb.render_kb() == "(p <=> q)"
     
-    def test_render_kb_mixed_clauses(self, capsys):
+    def test_render_kb_mixed_clauses(self):
         """Test rendering KB with mixed clause types."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         q = sp.Symbol("q")
         r = sp.Symbol("r")
-        
         kb.tell([p, sp.Implies(p, q), sp.Equivalent(q, r)])
-        
-        kb.render_kb()
-        captured = capsys.readouterr()
-        output = captured.out.strip()
-        assert "p" in output
-        assert "->" in output
-        assert "<=>" in output
+        output = kb.render_kb()
+        assert output == "p, (p -> q), (q <=> r)"
     
     def test_tell_rebuilds_kb(self):
         """Test that tell automatically rebuilds KB."""
@@ -502,22 +476,19 @@ class TestChickenKB:
         result = kb.validate_kb()
         assert result is not False
     
-    def test_render_chicken_kb(self, capsys):
+    def test_render_chicken_kb(self):
         """Test rendering ChickenKB with strategy clauses."""
         kb = ChickenKB()
         p1_stays = sp.Symbol("p1_stays")
         grudge = sp.Symbol("grudge")
         p2_stays = sp.Symbol("p2_stays")
-        
         kb.tell([sp.Implies(p1_stays, grudge)])
         kb.tell([sp.Equivalent(grudge, p2_stays)])
-        
-        kb.render_kb()
-        captured = capsys.readouterr()
-        output = captured.out.strip()
+        output = kb.render_kb()
         assert "p1_stays" in output
-        assert "->" in output
-        assert "<=>" in output
+        assert "grudge" in output
+        assert "p2_stays" in output
+        assert output == "(p1_stays -> grudge), (grudge <=> p2_stays)"
 
 
 class TestEssentialKBFunctionality:
