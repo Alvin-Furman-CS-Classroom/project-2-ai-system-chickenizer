@@ -163,7 +163,7 @@ class KnowledgeBase:
 
         return []
         
-        
+
 class ChickenKB(KnowledgeBase):
     """Knowledge base specialized for the Chicken game (strategy rules and outcomes)."""
 

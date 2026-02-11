@@ -2,13 +2,14 @@
 
 **Module:** Module 1 — Strategy Logic Encoder, Knowledge Base  
 **Source:** `.src/module1_kb.py`  
-**Reviewed against:** [Code Elegance Rubric](https://csc-343.path.app/rubrics/code-elegance.rubric.md)
+**Reviewed against:** [Code Elegance Rubric](https://csc-343.path.app/rubrics/code-elegance.rubric.md)  
+**Last refreshed:** Current codebase state.
 
 ---
 
 ## Summary
 
-Module 1 is **functional and readable**, with clear separation between a generic `KnowledgeBase` and a domain-specific `ChickenKB`. Main strengths: focused methods, sensible use of SymPy, and type hints on public methods. Areas for improvement: docstrings are not in standard form (they appear as standalone strings above methods rather than inside them), use of `type(x) ==` instead of `isinstance`, `visited == None` instead of `visited is None`, and leftover commented/dead code in `main()` and in methods. Fixing these would bring the code to “meets expectations” or higher across criteria.
+Module 1 is **readable and well-structured**, with clear separation between a generic `KnowledgeBase` and a domain-specific `ChickenKB`. Strengths: docstrings inside all methods with Args/Returns, type hints on public API, consistent use of `isinstance` and `visited is None`, shared `_clause_to_str` helper with list + `join()` for rendering, and `ChickenKB` round state (`self.rnd`, `self.rnd_history`) correctly initialized and reset. Remaining gaps: a block of commented-out code in `main()` (optional to remove) and no explicit error handling for invalid inputs (optional per spec).
 
 ---
 
@@ -18,49 +19,49 @@ Module 1 is **functional and readable**, with clear separation between a generic
 
 | Score | Notes |
 |-------|--------|
-| **3** | Names are generally clear and consistent. `tell`, `ask`, `rebuild_kb`, `forward_chain`, `backward_chain`, `render_kb`, `validate_kb`, `to_cnf`, `is_cnf` are descriptive. Minor issues: `rnd` / `rnd_history` in `ChickenKB` are only used as locals in `__init__` while `reset_kb` references `self.rnd` and `round_history` (typo: not `rnd_history`), so intent is unclear. |
+| **3** | Names are clear and consistent. `tell`, `ask`, `rebuild_kb`, `forward_chain`, `backward_chain`, `render_kb`, `validate_kb`, `to_cnf`, `is_cnf` are descriptive. `ChickenKB` uses `self.rnd` and `self.rnd_history` consistently in `__init__` and `reset_kb`. Helper `_clause_to_str` follows private-by-convention naming. |
 
 ### 2. Function and Method Design — **3**
 
 | Score | Notes |
 |-------|--------|
-| **3** | Functions are generally well-designed and focused. `tell`, `ask`, `rebuild_kb`, `validate_kb`, `is_cnf` are short and single-purpose. `forward_chain` and `backward_chain` are a bit longer but still readable. No function is excessively long. |
+| **3** | Functions are focused and appropriately sized. `tell`, `ask`, `rebuild_kb`, `validate_kb`, `is_cnf`, `to_cnf`, `render_kb` are short and single-purpose. `forward_chain` and `backward_chain` are slightly longer but readable. `_clause_to_str` keeps rendering logic in one place. |
 
-### 3. Abstraction and Modularity — **3**
-
-| Score | Notes |
-|-------|--------|
-| **3** | Abstraction is reasonable. `KnowledgeBase` holds core KB operations; `ChickenKB` extends it for the Chicken game. `render_path` is a module-level helper used by main and tests. No over-engineering; minor under-use of helpers (e.g. repeated render logic in `render_kb` and `render_path` could share a small function). |
-
-### 4. Style Consistency — **2**
+### 3. Abstraction and Modularity — **4**
 
 | Score | Notes |
 |-------|--------|
-| **2** | Inconsistent style in several places: (1) Docstrings are written as standalone string literals *above* methods (e.g. lines 18–20, 26–28) instead of inside the method as the first statement, so they are not actual docstrings. (2) `if forward: delimiter = " => "` and `else: delimiter = " <= "` on single lines reduce readability. (3) Mixed use of `type(clause) == sp.Implies` vs. `isinstance` (e.g. `is_cnf` uses `isinstance`; `render_kb`/`render_path` use `type(...) ==`). (4) Inconsistent spacing (e.g. blank line after `if visited == None:`). |
+| **4** | Abstraction is well-judged. `KnowledgeBase` holds core KB operations; `ChickenKB` extends it for the Chicken game. `_clause_to_str` is shared by `render_kb` and `render_path`, eliminating duplicated render logic. No unnecessary complexity. |
+
+### 4. Style Consistency — **3**
+
+| Score | Notes |
+|-------|--------|
+| **3** | Style is consistent. Docstrings are inside methods as the first statement. `isinstance` used for clause types; `delimiter = " => " if forward else " <= "` is clear. Spacing and indentation are uniform. Minor: one inline comment uses `#rules` (could be `# CNF: ...`). |
 
 ### 5. Code Hygiene — **2**
 
 | Score | Notes |
 |-------|--------|
-| **2** | Notable hygiene issues: (1) Commented-out code in `main()` (lines 176–188). (2) Commented-out `# print(...)` debug lines in `forward_chain` and `backward_chain`. (3) `ChickenKB.__init__` sets local `rnd_history` and `rnd` but never `self.rnd_history`/`self.rnd`; `reset_kb` then uses `self.rnd` and `round_history` (undefined), which is a bug or dead code. (4) No magic numbers, but string literals for delimiters could be named constants if reused. |
+| **2** | Mostly clean. Unused import removed. One remaining block of commented-out code in `main()` (old add_clause/entails/CNF/validate_kb block). Removing it would bring this to 3. No magic numbers; no debug print statements. |
 
 ### 6. Control Flow Clarity — **3**
 
 | Score | Notes |
 |-------|--------|
-| **3** | Control flow is generally clear. Early returns in `forward_chain` (query in facts) and `backward_chain` (query in visited, query in clauses). Nesting is minimal. The `while new_facts_added` loop in `forward_chain` is easy to follow. |
+| **3** | Control flow is clear. Early returns in `forward_chain` and `backward_chain`. Nesting is minimal. `while new_facts_added` loop is easy to follow. |
 
-### 7. Pythonic Idioms — **2**
+### 7. Pythonic Idioms — **3**
 
 | Score | Notes |
 |-------|--------|
-| **2** | Some non-idiomatic choices: (1) `visited == None` should be `visited is None`. (2) `type(clause) == sp.Implies` should be `isinstance(clause, sp.Implies)`. (3) String building with `output = output + ...` in loops should use a list and `str.join()` or an io.StringIO. (4) `recur_path != []` is better as `recur_path` (truthiness). (5) `list[sp.Expr]` is good; use of `sp.Expr` in type hints is appropriate. |
+| **3** | Code is Pythonic. Uses `visited is None`, `if recur_path:`, `isinstance()` for clause types. Render logic uses list comprehensions and `str.join()`. F-strings in `_clause_to_str`. Type hints use `list[sp.Expr]` appropriately. |
 
 ### 8. Error Handling — **1**
 
 | Score | Notes |
 |-------|--------|
-| **1** | No explicit error handling. Invalid inputs (e.g. non-list to `tell`, wrong types) would surface as SymPy or Python errors. No validation of clause list, no handling of empty or malformed expressions. Acceptable for a checkpoint if spec does not require it, but limits robustness. |
+| **1** | No explicit error handling. Invalid inputs (e.g. non-list to `tell`) would surface as SymPy or Python errors. No validation of clause list. Acceptable for checkpoint if spec does not require it; limits robustness. |
 
 ---
 
@@ -70,22 +71,21 @@ Module 1 is **functional and readable**, with clear separation between a generic
 |-----------|--------|
 | 1. Naming Conventions | 3 |
 | 2. Function and Method Design | 3 |
-| 3. Abstraction and Modularity | 3 |
-| 4. Style Consistency | 2 |
+| 3. Abstraction and Modularity | 4 |
+| 4. Style Consistency | 3 |
 | 5. Code Hygiene | 2 |
 | 6. Control Flow Clarity | 3 |
-| 7. Pythonic Idioms | 2 |
+| 7. Pythonic Idioms | 3 |
 | 8. Error Handling | 1 |
-| **Average** | **2.375** |
+| **Average** | **2.75** |
 
-**Overall Code Elegance (mapped to Module Rubric):** Average 2.375 → in the 2.5–3.4 band → **3** for “Code Elegance and Quality” in the Module Rubric (good code quality, readable and organized with minor issues).
+**Overall Code Elegance (mapped to Module Rubric):** Average 2.75 → in the 2.5–3.4 band → **3** for “Code Elegance and Quality” in the Module Rubric (good code quality, readable and organized with minor issues). With commented block removed, average would rise toward 2.875.
 
 ---
 
 ## Action Items
 
-1. **Docstrings:** Move all method descriptions inside each method as the first statement (e.g. `def tell(self, clauses: list[sp.Expr]) -> None:\n    """Adds clauses to knowledge base."""`).
-2. **Style:** Use `isinstance(clause, sp.Implies)` (and equivalents) instead of `type(clause) == sp.Implies`; use `visited is None` and `if recur_path:`.
-3. **Hygiene:** Remove commented-out code in `main()` and debug `# print` statements; fix or remove `ChickenKB`’s `rnd`/`rnd_history`/`round_history` so they are either proper instance attributes or not used in `reset_kb`.
-4. **Pythonic:** Build render strings with a list and `"".join()` (or similar) instead of repeated concatenation.
-5. **Error handling (optional):** Add minimal validation for `tell(clauses)` (e.g. require a list) and consider documenting expected types and behavior.
+1. **Optional — Hygiene:** Remove the remaining commented-out block in `main()` (old add_clause/entails/CNF/validate_kb lines) for a cleaner codebase.
+2. **Optional — Error handling:** Add minimal validation for `tell(clauses)` (e.g. require a list) if the spec or grading expects robustness.
+
+All previously listed action items (docstrings, style, ChickenKB, join, render_kb return value) have been addressed.
