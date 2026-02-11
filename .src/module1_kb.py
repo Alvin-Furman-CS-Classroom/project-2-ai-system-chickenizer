@@ -1,5 +1,9 @@
 # Module 1: Strategy Logic Encoder, Knowledge Base
+"""Strategy Logic Encoder and Knowledge Base for the Chickenizer system.
 
+Provides KnowledgeBase (tell/ask, CNF, forward/backward chaining) and ChickenKB
+for encoding game strategies and outcomes in propositional logic.
+"""
 
 # Dependencies:
 from typing import Any
@@ -7,58 +11,90 @@ import sympy as sp
 
 
 class KnowledgeBase:
+    """Propositional logic knowledge base with tell/ask, CNF, and forward/backward chaining."""
 
     def __init__(self):
+        """Initialize empty knowledge base with clauses list and SymPy And structure."""
+
         self.clauses = []
         self.clauses_for_rendering = []
 
         #CNF knowledge base, "AND of ORs" rather than "OR of ANDs"
-        self.kb = sp.And() 
+        self.kb = sp.And()
 
-    """tell:
-    Adds clauses to knowledge base.
-    """
-    def tell(self, clauses:list[sp.Expr]) -> None:
+    def tell(self, clauses: list[sp.Expr]) -> None:
+        """Add clauses to the knowledge base and rebuild the internal KB.
+
+        Args:
+            clauses: List of SymPy expressions (facts or rules) to add.
+
+        Returns:
+            None.
+        """
+
         self.clauses.extend(clauses)
         self.clauses_for_rendering.extend(clauses)
         self.rebuild_kb()
-    
-    """ask:
-    Checks if knowledge base entails a given query.
-    """
-    def ask(self, query:sp.Expr) -> bool:
+
+    def ask(self, query: sp.Expr) -> bool:
+        """Check if knowledge base entails given query.
+
+        Args:
+            query: A SymPy expression to check for entailment.
+
+        Returns:
+            True if KB entails query, False otherwise.
+        """
+
         return not sp.satisfiable(sp.And(self.kb, sp.Not(query)))
 
-    """rebuild_kb:
-    Rebuilds knowledge base from the clauses.
-    """
     def rebuild_kb(self) -> None:
+        """Rebuild the internal KB (SymPy And) from the current clauses list.
+
+        Returns:
+            None.
+        """
+
         if not self.clauses:
             self.kb = sp.And()
         else:
             self.kb = sp.And(*self.clauses)
-    
+
     def validate_kb(self) -> bool:
+        """Check whether the knowledge base is satisfiable (no contradiction).
+
+        Returns:
+            True if KB is satisfiable, False if unsatisfiable.
+        """
+
         return sp.satisfiable(self.kb)
 
-    """is_cnf:
-    Checks if knowledge base is in CNF (Conjunctive Normal Form).
-    """
     def is_cnf(self) -> bool:
-        #rules of CNF: each clause is OR of literals, top level is AND of clauses
+        """Check if  knowledge base is in CNF (Conjunctive Normal Form).
+
+        Returns:
+            True if every clause is an sp.And, False otherwise.
+        """
+-        #rules of CNF: each clause is OR of literals, top level is AND of clauses
         return all(isinstance(clause, sp.Or) for clause in self.clauses)
-    
-    """to_cnf:
-    Converts knowledge base to CNF.
-    """
+
     def to_cnf(self) -> None:
+        """Convert the knowledge base to Conjunctive Normal Form in place.
+
+        Returns:
+            None.
+        """
+
         self.kb = sp.to_cnf(self.kb)
         self.clauses = [clause for clause in self.kb.args]
 
-    """render_kb:
-    Renders knowledge base as a string.
-    """
     def render_kb(self) -> None:
+        """Render the knowledge base as a human-readable string and print it.
+
+        Returns:
+            None.
+        """
+
         output = ""
         for clause in self.clauses_for_rendering:
             if type(clause) == sp.Implies:
@@ -69,21 +105,25 @@ class KnowledgeBase:
                 output = output + str(clause) + ", "
         print(output[:-2].strip())
 
-    """forward_chain:
-    # Forward chains the knowledge base to entailed facts.
-    """
-    def forward_chain(self, query:sp.Expr) -> list[sp.Expr]:
+    def forward_chain(self, query: sp.Expr) -> list[sp.Expr]:
+        """Forward chain from known facts to derive the query if possible.
+
+        Args:
+            query: SymPy expression that is the goal to derive.
+
+        Returns:
+            List of clauses (implications) that were used to derive query, or [] if not derivable.
+        """
+
         path = []
         facts = self.clauses.copy()
         if query in facts: 
-            # print("query in facts:", query)
             return [query]
 
         new_facts_added = True
         while new_facts_added:
             new_facts_added = False
             for clause in self.clauses:
-                # print("clause:", clause)
                 if len(clause.args) != 0:
                     if not clause.args[0] in facts:
                         continue
@@ -94,59 +134,78 @@ class KnowledgeBase:
                     facts.append(clause.args[-1])
                     path.append(clause)
                     if clause.args[-1] == query:
-                        # print("query found in clause:", clause)
                         return path
         return []
 
-    """backward_chain: 
-    Backward chains the knowledge base to the query.
-    """
-    def backward_chain(self, query:sp.Expr, visited=None) -> list[sp.Expr]:
-        if visited == None:
+    def backward_chain(self, query: sp.Expr, visited=None) -> list[sp.Expr]:
+        """Backward chain from the query goal back to supporting facts.
+
+        Args:
+            query: SymPy expression that is the goal to prove.
+            visited: Set of already-visited goals (used internally to avoid cycles).
+
+        Returns:
+            List of clauses from facts to query that form a proof path, or [] if not derivable.
+        """
+
+        if visited is None:
             visited = set()
 
         
         if query in visited:
-            # print("query already visited:", query)
             return []
 
         visited.add(query)
         
         # Base case
         if query in self.clauses:
-            # print("query in clauses:", query)
             return [query]
 
         for clause in self.clauses:
             if len(clause.args) != 0:
                 if clause.args[-1] == query:
                     recur_path = self.backward_chain(clause.args[0], visited)
-                    # print("recur_path:", recur_path)
                     if recur_path != []:
-                        # print("recur_path + [clause, query]:", recur_path + [clause, query])
-                        return recur_path + [clause]#, query]
+                        return recur_path + [clause]
+
         return []
         
 class ChickenKB(KnowledgeBase):
+    """Knowledge base specialized for the Chicken game (strategy rules and outcomes)."""
+
     def __init__(self):
+        """Initialize an empty Chicken KB (extends KnowledgeBase)."""
+
         super().__init__()
         rnd_history = {}
         rnd = 0
         #preadding the "p1_stays" symbol to the knowledge base, since we operate under worst-case scenario assumptions
         #This is a placeholder--across multiple rounds, we'd want p1 to be able to change their aggression
-    
+
     def reset_kb(self) -> None:
+        """Clear all clauses and reset the KB to an empty state.
+
+        Returns:
+            None.
+        """
+
         self.clauses = []
         self.clauses_for_rendering = []
         self.kb = sp.And()
         self.rnd = 0
         round_history = {}
 
-"""render_path:
-    Renders a path of clauses as a string.
-    Mainly used for testing Forward and Backward Chaining.
-"""
-def render_path(path:list[sp.Expr], forward:bool = True) -> str:
+def render_path(path: list[sp.Expr], forward: bool = True) -> str:
+    """Render a path of clauses as a single string (e.g. for forward/backward chain output).
+
+    Args:
+        path: List of SymPy expressions (clauses) in the derivation path.
+        forward: If True use " => " between clauses; if False use " <= ".
+
+    Returns:
+        A string representation of the path with the chosen delimiter.
+    """
+
     output = ""
     if forward: delimiter = " => "
     else: delimiter = " <= "
@@ -161,7 +220,9 @@ def render_path(path:list[sp.Expr], forward:bool = True) -> str:
     return output[:-len(delimiter)].strip()
 
 
-def main():
+def main() -> None:
+    """Run a short demo: build a Chicken KB, check entailment, render KB and chain paths."""
+    
     our_kb = ChickenKB()
     # Create symbols for all the variables we'll use
     p1_stays = sp.Symbol("p1_stays")
