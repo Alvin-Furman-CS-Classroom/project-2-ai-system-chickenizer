@@ -1,13 +1,15 @@
-"""
-Unit tests for Module 1: Knowledge Base and ChickenKB classes.
+"""Unit tests for Module 1: Knowledge Base and ChickenKB classes.
 
-Tests cover:
-- Basic KB operations (tell, ask)
-- KB validation (satisfiability)
-- KB rendering
-- Edge cases and error handling
-- ChickenKB-specific functionality for strategy and outcome representation
-- Essential functionality (entailment, CNF conversion, inference)
+This test suite is organized into the following test classes:
+- TestKnowledgeBase: Basic KB operations (tell, ask, rebuild, validate, render, CNF)
+- TestChickenKB: Chicken game-specific scenarios and strategies
+- TestEssentialKBFunctionality: Core KB features (entailment, CNF, resolution, chaining, conflict reporting)
+- TestFutureFunctionality: Placeholder tests for future enhancements
+- TestForwardBackwardChaining: Explicit tests for forward/backward chain methods
+- TestInvalidInputs: Error handling and input validation tests
+
+Tests cover basic operations, CNF conversion, entailment, forward/backward chaining,
+conflict reporting, resolution inference, consequence inference, and Chicken game-specific scenarios.
 """
 
 import pytest
@@ -167,8 +169,9 @@ class TestKnowledgeBase:
         p = sp.Symbol("p")
         kb.tell([p])
         
-        result = kb.validate_kb()
-        assert result is not False  # Should return a model or True
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_validate_kb_satisfiable_complex(self):
         """Test validation of a complex satisfiable KB."""
@@ -179,8 +182,9 @@ class TestKnowledgeBase:
         
         kb.tell([sp.Implies(p, q), sp.Implies(q, r), p])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_validate_kb_unsatisfiable_contradiction(self):
         """Test validation of an unsatisfiable KB with direct contradiction."""
@@ -188,8 +192,9 @@ class TestKnowledgeBase:
         p = sp.Symbol("p")
         kb.tell([p, sp.Not(p)])
         
-        result = kb.validate_kb()
-        assert result is False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
     
     def test_validate_kb_unsatisfiable_chain(self):
         """Test validation of an unsatisfiable KB with logical chain."""
@@ -199,8 +204,9 @@ class TestKnowledgeBase:
         
         kb.tell([sp.Implies(p, q), p, sp.Not(q)])
         
-        result = kb.validate_kb()
-        assert result is False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
     
     def test_render_kb_empty(self):
         """Test rendering an empty KB."""
@@ -268,8 +274,9 @@ class TestKnowledgeBase:
         # Complex formula: (p -> q) AND (q -> r) AND (p OR r)
         kb.tell([sp.Implies(p, q), sp.Implies(q, r), sp.Or(p, r)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_xor_representation(self):
         """Test representing XOR (exclusive or) using implications."""
@@ -280,8 +287,9 @@ class TestKnowledgeBase:
         # p XOR q = (p -> ~q) AND (q -> ~p) AND (p OR q)
         kb.tell([sp.Implies(p, sp.Not(q)), sp.Implies(q, sp.Not(p)), sp.Or(p, q)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
 
 
 class TestChickenKB:
@@ -304,8 +312,9 @@ class TestChickenKB:
         # If grudge is true, then p2 stays
         kb.tell([sp.Implies(p1_stays, grudge), sp.Equivalent(grudge, p2_stays)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_strategy_tit_for_tat(self):
         """Test representing tit-for-tat strategy."""
@@ -319,8 +328,9 @@ class TestChickenKB:
         # This is simplified - in full implementation would track previous round
         kb.tell([sp.Equivalent(p1_stays, p2_stays), sp.Equivalent(p1_swerves, p2_swerves)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_strategy_always_swerve(self):
         """Test representing always-swerve strategy."""
@@ -330,8 +340,9 @@ class TestChickenKB:
         # Always swerve: p1_swerves is always true
         kb.tell([p1_swerves])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_strategy_always_stay(self):
         """Test representing always-stay strategy."""
@@ -340,8 +351,9 @@ class TestChickenKB:
         
         # Always stay: p1_stays is always true
         kb.tell([p1_stays])
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_outcome_collision(self):
         """Test representing collision outcome: both players stay."""
@@ -353,8 +365,9 @@ class TestChickenKB:
         # Collision occurs when both stay
         kb.tell([sp.Equivalent(collision, sp.And(p1_stays, p2_stays))])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_outcome_mutual_cooperation(self):
         """Test representing mutual cooperation: both swerve."""
@@ -368,8 +381,9 @@ class TestChickenKB:
         # Mutual cooperation: both swerve
         kb.tell([sp.Equivalent(mutual_cooperation, sp.And(p1_swerves, p2_swerves))])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_action_mutual_exclusivity(self):
         """Test that stay and swerve are mutually exclusive for a player."""
@@ -381,8 +395,9 @@ class TestChickenKB:
         kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
         kb.tell([sp.Implies(p1_swerves, sp.Not(p1_stays))])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_action_completeness(self):
         """Test that a player must either stay or swerve."""
@@ -393,8 +408,9 @@ class TestChickenKB:
         # A player must choose one action
         kb.tell([sp.Or(p1_stays, p1_swerves)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_strategy_conditional_response(self):
         """Test representing conditional response strategy."""
@@ -406,8 +422,9 @@ class TestChickenKB:
         # Conditional: if p2 stays, then p1 swerves (chicken out)
         kb.tell([sp.Implies(p2_stays, p1_swerves)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_strategy_escalation(self):
         """Test representing escalation strategy: respond in kind."""
@@ -421,8 +438,9 @@ class TestChickenKB:
         kb.tell([sp.Implies(p2_stays, p1_stays)])
         kb.tell([sp.Implies(p2_swerves, p1_swerves)])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_payoff_conditions(self):
         """Test representing payoff conditions based on outcomes."""
@@ -439,8 +457,9 @@ class TestChickenKB:
         # p2 wins if p2 stays and p1 swerves
         kb.tell([sp.Equivalent(p2_wins, sp.And(p2_stays, p1_swerves))])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_inconsistent_strategy(self):
         """Test that inconsistent strategies are detected as unsatisfiable."""
@@ -453,8 +472,9 @@ class TestChickenKB:
         kb.tell([p1_swerves])
         kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
         
-        result = kb.validate_kb()
-        assert result is False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
     
     def test_complex_strategy_combination(self):
         """Test a complex combination of strategy rules."""
@@ -473,8 +493,9 @@ class TestChickenKB:
         kb.tell([sp.Implies(p1_stays, sp.Not(p1_swerves))])
         kb.tell([sp.Implies(p2_stays, sp.Not(p2_swerves))])
         
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_render_chicken_kb(self):
         """Test rendering ChickenKB with strategy clauses."""
@@ -572,7 +593,8 @@ class TestEssentialKBFunctionality:
         
         # If original KB entails CNF form, then they're equivalent
         # This is a simplified check - full CNF conversion would be more thorough
-        assert test_kb.validate_kb() is False
+        is_sat, _ = test_kb.validate_kb()
+        assert is_sat is False
     
     def test_cnf_conversion_equivalent(self):
         """Test that equivalences should be convertible to CNF."""
@@ -600,8 +622,10 @@ class TestEssentialKBFunctionality:
         test2.rebuild_kb()
         
         # Both should be unsatisfiable if equivalent
-        assert test1.validate_kb() is False
-        assert test2.validate_kb() is False
+        is_sat1, _ = test1.validate_kb()
+        is_sat2, _ = test2.validate_kb()
+        assert is_sat1 is False
+        assert is_sat2 is False
     
     def test_cnf_validation(self):
         """Test that KB should be able to validate if it's in CNF format."""
@@ -617,7 +641,8 @@ class TestEssentialKBFunctionality:
         
         # Future: kb.is_cnf() should return True
         # For now, verify these are valid CNF clauses
-        assert kb.validate_kb() is not False
+        is_sat, _ = kb.validate_kb()
+        assert is_sat is True
     
     def test_cnf_validation_not_cnf(self):
         """Test that KB should detect when clauses are not in CNF."""
@@ -654,7 +679,8 @@ class TestEssentialKBFunctionality:
         test_kb.rebuild_kb()
         
         # If KB entails (q OR r), then KB U {~(q OR r)} is unsatisfiable
-        assert test_kb.validate_kb() is False
+        is_sat, _ = test_kb.validate_kb()
+        assert is_sat is False
     
     def test_forward_chaining(self):
         """Test forward chaining inference method."""
@@ -719,11 +745,13 @@ class TestEssentialKBFunctionality:
         kb.tell([p])
         kb.tell([sp.Not(p)])
         
-        # Future: kb.validate_kb() should return (False, conflict_report)
+        # validate_kb() returns (False, conflict_report)
         # conflict_report should identify that p and ~p conflict
-        # For now, verify it's unsatisfiable
-        result = kb.validate_kb()
-        assert result is False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
+        assert conflict_report.conflict_type == "direct"
+        assert len(conflict_report.conflicting_clauses) == 2
     
     def test_conflict_reporting_chain_contradiction(self):
         """Test conflict reporting for contradictions through logical chain."""
@@ -735,10 +763,12 @@ class TestEssentialKBFunctionality:
         kb.tell([p])
         kb.tell([sp.Not(q)])
         
-        # Future: conflict_report should identify the chain: p -> q, p, ~q
-        # For now, verify it's unsatisfiable
-        result = kb.validate_kb()
-        assert result is False
+        # conflict_report should identify the chain: p -> q, p, ~q
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
+        assert conflict_report.conflict_type == "chain"
+        assert len(conflict_report.conflicting_clauses) == 3
     
     def test_conflict_reporting_multiple_conflicts(self):
         """Test conflict reporting when multiple conflicts exist."""
@@ -751,10 +781,12 @@ class TestEssentialKBFunctionality:
         kb.tell([q])
         kb.tell([sp.Not(q)])
         
-        # Future: conflict_report should identify both conflicts
-        # For now, verify it's unsatisfiable
-        result = kb.validate_kb()
-        assert result is False
+        # conflict_report should identify conflicts
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is False
+        assert conflict_report is not None
+        # May detect first conflict (direct) or multiple
+        assert conflict_report.conflict_type in ["direct", "minimal", "all"]
     
     def test_strategy_inference_chicken_kb(self):
         """Test inferring strategy consequences in ChickenKB context."""
@@ -794,7 +826,8 @@ class TestEssentialKBFunctionality:
         test_kb.clauses = kb.clauses.copy()
         test_kb.tell([sp.Not(sp.Or(sp.Not(p), q))])
         test_kb.rebuild_kb()
-        assert test_kb.validate_kb() is False
+        is_sat, _ = test_kb.validate_kb()
+        assert is_sat is False
 
 
 class TestFutureFunctionality:
@@ -842,8 +875,9 @@ class TestFutureFunctionality:
         
         # Future: kb.resolve() should infer (q OR r)
         # For now, verify KB is satisfiable
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_query_answering(self):
         """Test answering queries about the KB (future functionality)."""
@@ -861,8 +895,8 @@ class TestFutureFunctionality:
         test_kb.tell([q])
         test_kb.rebuild_kb()
         
-        result = test_kb.validate_kb()
-        assert result is not False  # KB is consistent with q
+        is_sat, _ = test_kb.validate_kb()
+        assert is_sat is True  # KB is consistent with q
     
     def test_strategy_consistency_check(self):
         """Test checking if a strategy is internally consistent (future functionality)."""
@@ -876,8 +910,9 @@ class TestFutureFunctionality:
         
         # Future: kb.is_strategy_consistent() should check for contradictions
         # For now, verify satisfiability
-        result = kb.validate_kb()
-        assert result is not False
+        is_sat, conflict_report = kb.validate_kb()
+        assert is_sat is True
+        assert conflict_report is None
     
     def test_outcome_prediction(self):
         """Test predicting game outcomes from strategies (future functionality)."""
@@ -898,8 +933,8 @@ class TestFutureFunctionality:
         test_kb.tell([collision])
         test_kb.rebuild_kb()
         
-        result = test_kb.validate_kb()
-        assert result is not False  # Consistent with collision
+        is_sat, _ = test_kb.validate_kb()
+        assert is_sat is True  # Consistent with collision
     
     def test_strategy_comparison(self):
         """Test comparing different strategies (future functionality)."""
@@ -918,8 +953,10 @@ class TestFutureFunctionality:
         
         # Future: kb1.compare(kb2) should identify differences
         # For now, verify both are valid
-        assert kb1.validate_kb() is not False
-        assert kb2.validate_kb() is not False
+        is_sat1, _ = kb1.validate_kb()
+        is_sat2, _ = kb2.validate_kb()
+        assert is_sat1 is True
+        assert is_sat2 is True
 
 
 class TestForwardBackwardChaining:
@@ -966,23 +1003,66 @@ class TestForwardBackwardChaining:
         assert render_path(kb.forward_chain(collision)) == ""
         assert render_path(kb.backward_chain(collision), False) == ""
 
-    #  currently trying to construct, will fix later
-    # def test_chain_chicken_game_scenario(self):
-    #     """Test forward/backward chaining with chicken game: p1_stays -> p2_swerves."""
-    #     kb = ChickenKB()
-    #     p1_stays = sp.Symbol("p1_stays")
-    #     p2_swerves = sp.Symbol("p2_swerves")
-    #     collision = sp.Symbol("collision")
 
-    #     # some standard chicken game rules
-    #     kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
-    #     kb.tell([sp.Implies(sp.And(p1_stays, p2_stays), collision)])
-    #     kb.tell([sp.Implies(collision, grudge)])
-    #     kb.tell([sp.Implies(grudge, p2_stays)])
-    #     kb.render_kb()
 
-    #     assert render_path(kb.forward_chain(p2_swerves)) == "(p1_stays -> p2_swerves)"
-    #     assert render_path(kb.backward_chain(p2_swerves), False) == "p1_stays <= (p1_stays -> p2_swerves)"
+
+class TestInvalidInputs:
+    """Test cases for invalid input handling and error cases."""
+    
+    def test_tell_with_non_list(self):
+        """Test that tell() raises TypeError when given non-list input."""
+        kb = KnowledgeBase()
+        p = sp.Symbol("p")
+        with pytest.raises(TypeError):
+            kb.tell(p)  # Single expression, not a list
+    
+    def test_tell_with_non_expression_in_list(self):
+        """Test that tell() raises TypeError when list contains non-SymPy expressions."""
+        kb = KnowledgeBase()
+        with pytest.raises(TypeError):
+            kb.tell(["not_a_symbol", 42])
+    
+    def test_ask_with_non_expression(self):
+        """Test that ask() raises TypeError when query is not a SymPy expression."""
+        kb = KnowledgeBase()
+        p = sp.Symbol("p")
+        kb.tell([p])
+        with pytest.raises(TypeError):
+            kb.ask("not_a_symbol")
+    
+    def test_forward_chain_with_non_expression(self):
+        """Test that forward_chain() raises TypeError when query is not a SymPy expression."""
+        kb = KnowledgeBase()
+        p = sp.Symbol("p")
+        kb.tell([p])
+        with pytest.raises(TypeError):
+            kb.forward_chain("not_a_symbol")
+    
+    def test_backward_chain_with_non_expression(self):
+        """Test that backward_chain() raises TypeError when query is not a SymPy expression."""
+        kb = KnowledgeBase()
+        p = sp.Symbol("p")
+        kb.tell([p])
+        with pytest.raises(TypeError):
+            kb.backward_chain("not_a_symbol")
+    
+    def test_resolve_with_non_cnf_clauses(self):
+        """Test that resolve() handles non-CNF clauses."""
+        kb = KnowledgeBase()
+        p = sp.Symbol("p")
+        q = sp.Symbol("q")
+        
+        # Resolve expects CNF (sp.Or or single literals)
+        # Passing implications should return None
+        result = kb.resolve(sp.Implies(p, q), sp.Implies(q, p))
+        assert result is None
+    
+    def test_empty_list_to_tell(self):
+        """Test that tell() handles empty list gracefully."""
+        kb = KnowledgeBase()
+        kb.tell([])  # Should not error
+        assert len(kb.clauses) == 0
+        assert kb.render_kb() == ""
 
 
 if __name__ == "__main__":
