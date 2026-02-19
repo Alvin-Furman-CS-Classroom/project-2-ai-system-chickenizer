@@ -30,6 +30,7 @@ class GameEngine:
         "round": 0,
         "p1_action_history": [],
         "p2_action_history": [],
+        "score": [],
     }
     
     def __init__(self, gamestate: Optional[Dict[str, Any]] = None):
@@ -91,6 +92,16 @@ class GameEngine:
             if self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
                 self.gamestate["p1_hp"] -= self.gamestate["p1_crash_dmg"]
                 self.gamestate["p2_hp"] -= self.gamestate["p2_crash_dmg"]
+            
+            # Update score based on round outcome
+            if self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
+                self.gamestate["score"].append("P1")
+            elif self.gamestate["p2_stay"] and not self.gamestate["p1_stay"]:
+                self.gamestate["score"].append("P2")
+            elif not self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
+                self.gamestate["score"].append("TIE")
+            elif self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
+                self.gamestate["score"].append("CRASH")
             
             # Increment round counter
             self.gamestate["round"] += 1
@@ -181,6 +192,7 @@ class GameEngine:
         self.gamestate["round"] = 0
         self.gamestate["p1_action_history"] = []
         self.gamestate["p2_action_history"] = []
+        self.gamestate["score"] = []
         
         while self.gamestate["round"] < max_rounds:
             # Check for game over conditions
