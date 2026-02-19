@@ -305,42 +305,6 @@ class KnowledgeBase:
         pieces = [_clause_to_str(c) for c in self.clauses_for_rendering]
         return ", ".join(pieces)
 
-    def forward_chain(self, query: sp.Basic) -> list[sp.Basic]:
-        """Forward chain from known facts to derive the query if possible.
-
-        Args:
-            query: SymPy object that is the goal to derive.
-
-        Returns:
-            List of clauses (implications) that were used to derive query, or [] if not derivable.
-        """
-        query = self._require_expr(query, name="query")
-
-        facts: set[sp.Basic] = {c for c in self.clauses if isinstance(c, sp.Symbol)}
-        if query in facts:
-            return [query]
-
-        path: list[sp.Basic] = []
-        changed = True
-        while changed:
-            changed = False
-            for rule in (c for c in self.clauses if isinstance(c, sp.Implies)):
-                antecedent, consequent = rule.args
-
-                if isinstance(antecedent, sp.And):
-                    ok = all(a in facts for a in antecedent.args)
-                else:
-                    ok = antecedent in facts
-
-                if ok and consequent not in facts:
-                    facts.add(consequent)
-                    path.append(rule)
-                    changed = True
-                    if consequent == query:
-                        return path
-
-        return []
-
     def backward_chain(self, query: sp.Basic, visited=None) -> list[sp.Basic]:
         """Backward chain from the query goal back to supporting facts.
 
@@ -385,6 +349,19 @@ class KnowledgeBase:
                     return recur_path + [rule]
 
         return []
+
+    def forward_chain_derive_query(self, query: sp.Basic) -> list[sp.Basic]:
+        """Forward chain from known facts to derive the query if possible.
+
+        Args:
+            query: SymPy object that is the goal to derive.
+
+        Returns:
+            List of clauses (implications) that were used to derive query, or [] if not derivable.
+        """
+        query = self._require_expr(query, name="query")
+        return self.forward_chain(query)
+
     
     def infer_consequences(self) -> List[sp.Basic]:
         """Infer all logical consequences from the knowledge base.
@@ -395,16 +372,31 @@ class KnowledgeBase:
         Returns:
             List of all entailed facts (atoms) that can be derived from the KB.
         """
-        consequences = []
-        facts: set[sp.Basic] = set()
+        return self.forward_chain()
+    
+
+    def forward_chain(self, query: sp.Basic = None) -> list[sp.Basic]:
+        """
+        Forward chain from known facts. Used by forward_chain_derive_query to derive the query if possible. If no query is provided, return all entailed facts.
+
+        Args:
+            query: SymPy object that is the goal to derive, if any.
+
+        Returns:
+            List of clauses (implications) that were used to derive query, or [] if not derivable.
+        """ 
+        facts: set[sp.Basic] = {c for c in self.clauses if isinstance(c, sp.Symbol)}
+
+        # If the query is a direct fact, return it.
+        if query is not None and query in facts:
+            return [query]
         
-        # Start with direct facts (atoms) in the KB
-        for clause in self.clauses:
-            if isinstance(clause, sp.Symbol):
-                facts.add(clause)
-                consequences.append(clause)
-        
-        # Forward chain to derive new facts
+        consequences: list[sp.Basic] = []
+        if query is None:
+            consequences = list(facts.copy())
+        # else:
+        #     consequences.append(query)
+
         changed = True
         while changed:
             changed = False
@@ -420,11 +412,24 @@ class KnowledgeBase:
                 # If antecedent is satisfied and consequent not yet derived
                 if antecedent_satisfied and consequent not in facts:
                     facts.add(consequent)
-                    consequences.append(consequent)
+                    # for no query, we just add the consequent to the consequences - entailing facts
+                    if query is None:
+                        consequences.append(consequent)
+
+                    # for a query, we add the rule that derived the consequent to the consequences - entailing the query
+                    else:
+                        consequences.append(rule)
+                        if consequent == query:
+                            return consequences
+                    
+                    
                     changed = True
-        
-        return consequences
-    
+
+        if query is not None:
+            return consequences
+        else:
+            return []
+
     def resolve(self, clause1: sp.Basic, clause2: sp.Basic) -> Optional[sp.Basic]:
         """Perform resolution inference on two clauses.
         

@@ -698,7 +698,7 @@ class TestEssentialKBFunctionality:
         kb.tell([p])
         
         # Forward chaining should infer: q, then r, then s
-        # Future: kb.forward_chain() should return [q, r, s]
+        # Future: kb.forward_chain_derive_query() should return [q, r, s]
         # Verify that s is entailed using ask()
         assert kb.ask(s) is True  # KB entails s
     
@@ -960,7 +960,7 @@ class TestFutureFunctionality:
 
 
 class TestForwardBackwardChaining:
-    """Test cases for forward_chain and backward_chain methods (assumes correct implementation)."""
+    """Test cases for forward_chain_derive_query and backward_chain methods (assumes correct implementation)."""
 
     def test_chain_simple_implication(self):
         """Test forward chaining: p1_stays -> p2_swerves, given p1_stays, query p2_swerves."""
@@ -969,7 +969,7 @@ class TestForwardBackwardChaining:
         p2_swerves = sp.Symbol("p2_swerves")
         kb.tell([p1_stays, sp.Implies(p1_stays, p2_swerves)])
 
-        assert render_path(kb.forward_chain(p2_swerves)) == "(p1_stays -> p2_swerves)"
+        assert render_path(kb.forward_chain_derive_query(p2_swerves)) == "(p1_stays -> p2_swerves)"
         assert render_path(kb.backward_chain(p2_swerves), False) == "p1_stays <= (p1_stays -> p2_swerves)"
 
     def test_chain_of_implications(self):
@@ -980,7 +980,7 @@ class TestForwardBackwardChaining:
         grudge = sp.Symbol("grudge")
         kb.tell([p1_stays, sp.Implies(p1_stays, grudge), sp.Implies(grudge, p2_stays)])
 
-        assert render_path(kb.forward_chain(p2_stays)) == "(p1_stays -> grudge) => (grudge -> p2_stays)"
+        assert render_path(kb.forward_chain_derive_query(p2_stays)) == "(p1_stays -> grudge) => (grudge -> p2_stays)"
         assert render_path(kb.backward_chain(p2_stays), False) == "p1_stays <= (p1_stays -> grudge) <= (grudge -> p2_stays)"
 
     def test_chain_query_is_direct_fact(self):
@@ -989,7 +989,7 @@ class TestForwardBackwardChaining:
         p1_stays = sp.Symbol("p1_stays")
         kb.tell([p1_stays])
 
-        assert render_path(kb.forward_chain(p1_stays)) == "p1_stays"
+        assert render_path(kb.forward_chain_derive_query(p1_stays)) == "p1_stays"
         assert render_path(kb.backward_chain(p1_stays), False) == "p1_stays"
 
     def test_chain_query_not_derivable(self):
@@ -1000,7 +1000,7 @@ class TestForwardBackwardChaining:
         collision = sp.Symbol("collision")
         kb.tell([sp.Implies(p1_stays, p2_swerves), sp.Implies(p2_swerves, collision)])
 
-        assert render_path(kb.forward_chain(collision)) == ""
+        assert render_path(kb.forward_chain_derive_query(collision)) == ""
         assert render_path(kb.backward_chain(collision), False) == ""
 
 
@@ -1031,12 +1031,12 @@ class TestInvalidInputs:
             kb.ask("not_a_symbol")
     
     def test_forward_chain_with_non_expression(self):
-        """Test that forward_chain() raises TypeError when query is not a SymPy expression."""
+        """Test that forward_chain_derive_query() raises TypeError when query is not a SymPy expression."""
         kb = KnowledgeBase()
         p = sp.Symbol("p")
         kb.tell([p])
         with pytest.raises(TypeError):
-            kb.forward_chain("not_a_symbol")
+            kb.forward_chain_derive_query("not_a_symbol")
     
     def test_backward_chain_with_non_expression(self):
         """Test that backward_chain() raises TypeError when query is not a SymPy expression."""
