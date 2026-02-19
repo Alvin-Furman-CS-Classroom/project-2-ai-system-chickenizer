@@ -25,6 +25,23 @@ from strategies import (  # type: ignore
 from engine import GameEngine  # type: ignore
 
 
+# Default gamestate with full HP for resetting between games
+DEFAULT_GAMESTATE = {
+    "p1_stay": False,
+    "p2_stay": False,
+    "p1_hp": 100,
+    "p2_hp": 100,
+    "p1_hp_thresh": 20,
+    "p2_hp_thresh": 20,
+    "p1_crash_dmg": 10,
+    "p2_crash_dmg": 10,
+    "round": 0,
+    "p1_action_history": [],
+    "p2_action_history": [],
+    "score": [],
+}
+
+
 def main():
     """Run example game simulations."""
     
@@ -38,11 +55,12 @@ def main():
     # Create simulator
     simulator = GameSimulator()
     
-    # Run simulation
+    # Run simulation with fresh gamestate (resets HP)
     result = simulator.simulate(
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
-        max_rounds=5
+        max_rounds=5,
+        initial_gamestate=DEFAULT_GAMESTATE.copy()
     )
     
     simulator.print_summary(result)
@@ -57,7 +75,8 @@ def main():
     result = simulator.simulate(
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
-        max_rounds=10
+        max_rounds=10,
+        initial_gamestate=DEFAULT_GAMESTATE.copy()
     )
     
     simulator.print_summary(result)
@@ -72,7 +91,8 @@ def main():
     result = simulator.simulate(
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
-        max_rounds=8
+        max_rounds=8,
+        initial_gamestate=DEFAULT_GAMESTATE.copy()
     )
     
     simulator.print_summary(result)
@@ -94,7 +114,8 @@ def main():
     result = simulator.simulate(
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
-        max_rounds=6
+        max_rounds=6,
+        initial_gamestate=DEFAULT_GAMESTATE.copy()
     )
     
     simulator.print_summary(result)
