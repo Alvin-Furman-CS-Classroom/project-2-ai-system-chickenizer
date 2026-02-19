@@ -65,21 +65,31 @@ class AlwaysSwerveStrategy(Strategy):
 
 
 class TitForTatStrategy(Strategy):
-    """Strategy that mirrors the opponent's last action.
+    """Strategy that mirrors the opponent's action from the last completed round.
     
-    On the first round (when opponent has no history), defaults to swerve
-    (cooperation).
+    Reacts to what the opponent did in the previous round, not their immediately
+    previous action. On the first round (round 0), defaults to swerve (cooperation).
     """
     
     def decide(self, gamestate: Dict[str, Any]) -> bool:
+        current_round = gamestate.get("round", 0)
         opponent_history = gamestate.get(f"{self.opponent}_action_history", [])
         
-        # If opponent has no history, default to swerve (cooperate initially)
-        if not opponent_history:
+        # If we're in round 0 or opponent has no history, default to swerve (cooperate initially)
+        if current_round == 0 or not opponent_history:
             return False
         
-        # Mirror opponent's last action
-        last_action = opponent_history[-1]
+        # React to opponent's action from the last completed round (round - 1)
+        # Each round adds one action to the history, so index (round - 1) is the last completed round
+        last_round_index = current_round - 1
+        
+        # Safety check: ensure we have enough history
+        if last_round_index >= len(opponent_history):
+            # Fallback to most recent action if history is incomplete
+            last_action = opponent_history[-1] if opponent_history else "swerve"
+        else:
+            last_action = opponent_history[last_round_index]
+        
         return last_action == "stay"
 
 
