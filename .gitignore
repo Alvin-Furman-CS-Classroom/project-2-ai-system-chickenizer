@@ -11,5 +11,8 @@ coverage/
 dist/
 build/
 *.log
+# Debug reports - ignore all .txt files but keep .gitkeep
+debug_reports/*.txt
+!debug_reports/.gitkeep
 .idea/
 .vscode/
