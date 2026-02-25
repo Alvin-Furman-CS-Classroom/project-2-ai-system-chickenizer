@@ -108,7 +108,7 @@ def main():
             round_num = gamestate.get("round", 0)
             return round_num % 2 == 0
     
-    p1_strategy = CustomStrategy("p1")
+    p1_strategy = AggressiveStrategy("p1")
     p2_strategy = TitForTatStrategy("p2")
     
     result = simulator.simulate(
