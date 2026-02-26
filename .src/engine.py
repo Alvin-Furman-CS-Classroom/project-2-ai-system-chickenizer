@@ -17,8 +17,11 @@ class GameEngine:
     players alternate actions. After each action, a new gamestate is generated
     reflecting the updated game state.
     """
-    
-    DEFAULT_GAMESTATE = {
+
+    # Threshold at which resilience difference forces a tap-out.
+    RESILIENCE_THRESHOLD: int = 100
+
+    DEFAULT_GAMESTATE: Dict[str, Any] = {
         "p1_stay": False,
         "p2_stay": False,
         "p1_hp": 100,
@@ -31,8 +34,30 @@ class GameEngine:
         "p1_action_history": [],
         "p2_action_history": [],
         "score": [],
+        # Resilience scores capture how much each player can "stay in the game".
+        # These can be influenced by round wins/losses, crashes, HP, etc.
+        "p1_resilience": 0,
+        "p2_resilience": 0,
+        # Convenience field for differential resilience used by minimax: R1 - R2.
+        "resilience_diff": 0,
+        # Per-player preference weights for translating round outcomes and HP
+        # changes into resilience updates. "Cares about X" == non-zero weight.
+        "p1_preferences": {
+            "round_win": 10,
+            "round_loss": -10,
+            "tie": 0,
+            "crash": -15,
+            "hp_delta": 0,  # default: P1 does not care about HP unless overridden
+        },
+        "p2_preferences": {
+            "round_win": 10,
+            "round_loss": -10,
+            "tie": 0,
+            "crash": -15,
+            "hp_delta": 0,  # default: P2 does not care about HP unless overridden
+        },
     }
-    
+
     def __init__(self, gamestate: Optional[Dict[str, Any]] = None):
         """Initialize the game engine with a gamestate.
         
@@ -45,7 +70,7 @@ class GameEngine:
         """
         if gamestate is None:
             gamestate = deepcopy(self.DEFAULT_GAMESTATE)
-        
+
         # Ensure type consistency
         for key, value in gamestate.items():
             if key not in self.DEFAULT_GAMESTATE:
@@ -55,15 +80,15 @@ class GameEngine:
                     f"Value type {type(value)} does not match expected gamestate "
                     f"type {type(self.DEFAULT_GAMESTATE[key])} for key {key}"
                 )
-        
+
         # Ensure all required keys are present
         for key in self.DEFAULT_GAMESTATE:
             if key not in gamestate:
                 gamestate[key] = deepcopy(self.DEFAULT_GAMESTATE[key])
-        
+
         self.gamestate = gamestate
         self.gamestate_history: List[Dict[str, Any]] = [deepcopy(self.gamestate)]
-    
+
     def get_gamestate(self) -> Dict[str, Any]:
         """Get the current game state.
         
@@ -71,7 +96,7 @@ class GameEngine:
             A copy of the current gamestate dictionary.
         """
         return deepcopy(self.gamestate)
-    
+
     def generate_gamestate(self, increment_round: bool = False) -> Dict[str, Any]:
         """Generate and return the current gamestate.
         
@@ -88,29 +113,74 @@ class GameEngine:
             A copy of the updated gamestate dictionary.
         """
         if increment_round:
+            # Track HP before applying any round-end effects so we can compute
+            # HP-based contributions to resilience for players who care about HP.
+            old_p1_hp = self.gamestate["p1_hp"]
+            old_p2_hp = self.gamestate["p2_hp"]
+
             # Apply crash damage if both players stayed
             if self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
                 self.gamestate["p1_hp"] -= self.gamestate["p1_crash_dmg"]
                 self.gamestate["p2_hp"] -= self.gamestate["p2_crash_dmg"]
-            
-            # Update score based on round outcome
+
+            # Determine round outcome and update score
+            round_outcome: Optional[str] = None
             if self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
-                self.gamestate["score"].append("P1")
+                round_outcome = "P1"
             elif self.gamestate["p2_stay"] and not self.gamestate["p1_stay"]:
-                self.gamestate["score"].append("P2")
+                round_outcome = "P2"
             elif not self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
-                self.gamestate["score"].append("TIE")
+                round_outcome = "TIE"
             elif self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
-                self.gamestate["score"].append("CRASH")
-            
+                round_outcome = "CRASH"
+
+            if round_outcome is not None:
+                self.gamestate["score"].append(round_outcome)
+
+                # Fetch per-player preference weights; default to empty dicts.
+                p1_prefs: Dict[str, Any] = self.gamestate.get("p1_preferences", {})
+                p2_prefs: Dict[str, Any] = self.gamestate.get("p2_preferences", {})
+
+                # Update resilience scores based on round outcome.
+                # Everyone cares about game results via these weights.
+                if round_outcome == "P1":
+                    self.gamestate["p1_resilience"] += int(p1_prefs.get("round_win", 0))
+                    self.gamestate["p2_resilience"] += int(p2_prefs.get("round_loss", 0))
+                elif round_outcome == "P2":
+                    self.gamestate["p1_resilience"] += int(p1_prefs.get("round_loss", 0))
+                    self.gamestate["p2_resilience"] += int(p2_prefs.get("round_win", 0))
+                elif round_outcome == "TIE":
+                    self.gamestate["p1_resilience"] += int(p1_prefs.get("tie", 0))
+                    self.gamestate["p2_resilience"] += int(p2_prefs.get("tie", 0))
+                elif round_outcome == "CRASH":
+                    self.gamestate["p1_resilience"] += int(p1_prefs.get("crash", 0))
+                    self.gamestate["p2_resilience"] += int(p2_prefs.get("crash", 0))
+
+                # Additionally, reflect HP changes in resilience so that players
+                # who care about HP (non-zero hp_delta weight) have HP gain/loss
+                # affect their score.
+                delta_p1_hp = self.gamestate["p1_hp"] - old_p1_hp
+                delta_p2_hp = self.gamestate["p2_hp"] - old_p2_hp
+                hp_weight_p1 = int(p1_prefs.get("hp_delta", 0))
+                hp_weight_p2 = int(p2_prefs.get("hp_delta", 0))
+                if delta_p1_hp != 0 and hp_weight_p1 != 0:
+                    self.gamestate["p1_resilience"] += delta_p1_hp * hp_weight_p1
+                if delta_p2_hp != 0 and hp_weight_p2 != 0:
+                    self.gamestate["p2_resilience"] += delta_p2_hp * hp_weight_p2
+
+                # Maintain resilience differential R1 - R2 used by minimax.
+                self.gamestate["resilience_diff"] = (
+                    self.gamestate["p1_resilience"] - self.gamestate["p2_resilience"]
+                )
+
             # Increment round counter
             self.gamestate["round"] += 1
-        
+
         # Save to history
         self.gamestate_history.append(deepcopy(self.gamestate))
-        
+
         return self.get_gamestate()
-    
+
     def play_action(self, player: str, action: bool) -> Dict[str, Any]:
         """Execute a player's action and update the gamestate.
         
@@ -126,14 +196,14 @@ class GameEngine:
         """
         if player not in ["p1", "p2"]:
             raise ValueError(f"Player must be 'p1' or 'p2', got '{player}'")
-        
+
         self.gamestate[f"{player}_stay"] = action
         # Append action to player's history
         action_str = "stay" if action else "swerve"
         self.gamestate[f"{player}_action_history"].append(action_str)
-        
+
         return self.get_gamestate()
-    
+
     def is_game_over(self) -> tuple[bool, Optional[str]]:
         """Check if the game should end.
         
@@ -143,25 +213,36 @@ class GameEngine:
             - reason: String describing why game ended, or None if not over
         
         Note:
-            Currently only checks round-based termination. Future implementations
-            can add HP-based termination (e.g., if p1_hp <= 0 or p2_hp <= 0).
+            Checks both HP-based termination (players running out of HP) and
+            resilience-based termination (one player "tapping out" when the
+            resilience differential becomes too large in magnitude).
         """
-        # Placeholder for HP-based game over conditions
-        # Future: Check if either player's HP <= 0
-        # if self.gamestate["p1_hp"] <= 0:
-        #     return True, "p1_hp_zero"
-        # if self.gamestate["p2_hp"] <= 0:
-        #     return True, "p2_hp_zero"
-        
-        # For now, game over is only checked externally via round count
+        # HP-based game over conditions
+        if self.gamestate["p1_hp"] <= 0 and self.gamestate["p2_hp"] <= 0:
+            return True, "both_hp_zero"
+        if self.gamestate["p1_hp"] <= 0:
+            return True, "p1_hp_zero"
+        if self.gamestate["p2_hp"] <= 0:
+            return True, "p2_hp_zero"
+
+        # Resilience-based tap-out: when |R1 - R2| exceeds threshold.
+        diff = self.gamestate.get("resilience_diff", 0)
+        if diff >= self.RESILIENCE_THRESHOLD:
+            # P1 is much more resilient; P2 taps out.
+            return True, "p2_resilience_tapout"
+        if diff <= -self.RESILIENCE_THRESHOLD:
+            # P2 is much more resilient; P1 taps out.
+            return True, "p1_resilience_tapout"
+
+        # Otherwise, game over is only checked externally via round count.
         return False, None
-    
+
     def run_game(
         self,
         max_rounds: int,
         p1_strategy: Callable[[Dict[str, Any]], bool],
         p2_strategy: Callable[[Dict[str, Any]], bool],
-        initial_gamestate: Optional[Dict[str, Any]] = None
+        initial_gamestate: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Run the game loop until max_rounds is reached or game over.
         
@@ -185,40 +266,43 @@ class GameEngine:
         # Reset to initial state if provided
         if initial_gamestate is not None:
             self.__init__(initial_gamestate)
-        
-        # Reset action flags and history for new game
+
+        # Reset action flags, history, score, and resilience for new game
         self.gamestate["p1_stay"] = False
         self.gamestate["p2_stay"] = False
         self.gamestate["round"] = 0
         self.gamestate["p1_action_history"] = []
         self.gamestate["p2_action_history"] = []
         self.gamestate["score"] = []
-        
+        self.gamestate["p1_resilience"] = 0
+        self.gamestate["p2_resilience"] = 0
+        self.gamestate["resilience_diff"] = 0
+
         while self.gamestate["round"] < max_rounds:
             # Check for game over conditions
-            is_over, reason = self.is_game_over()
+            is_over, _ = self.is_game_over()
             if is_over:
                 break
-            
+
             # Generate initial gamestate for this round (before any actions)
             current_state = self.generate_gamestate(increment_round=False)
-            
+
             # Player 1 acts
             p1_action = p1_strategy(current_state)
             self.play_action("p1", p1_action)
-            
+
             # Generate gamestate after p1's action (for p2 to see)
             current_state = self.generate_gamestate(increment_round=False)
-            
+
             # Player 2 acts
             p2_action = p2_strategy(current_state)
             self.play_action("p2", p2_action)
-            
+
             # Generate final gamestate for this round (applies crash damage, increments round)
             self.generate_gamestate(increment_round=True)
-        
+
         return self.gamestate_history
-    
+
     def step(self, key: str, value: Any) -> Dict[str, Any]:
         """Update a single gamestate field (legacy method for backward compatibility).
         
@@ -239,5 +323,7 @@ class GameEngine:
                 f"Value type {type(value)} does not match gamestate type "
                 f"{type(self.gamestate[key])} for key {key}"
             )
+        # Apply the update after successful validation.
         self.gamestate[key] = value
         return self.get_gamestate()
+

@@ -7,6 +7,29 @@ assigned to players and used with the GameEngine to simulate games.
 
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
+from copy import deepcopy
+from pathlib import Path
+import importlib.util
+import random
+
+
+def _load_engine_class():
+    """Helper to load GameEngine regardless of package context.
+
+    When strategies.py is imported as part of a package, we can use a normal
+    relative import. When it is loaded directly via spec_from_file_location
+    (as in unit tests), we fall back to a path-based import.
+    """
+    try:
+        from .engine import GameEngine  # type: ignore
+        return GameEngine
+    except Exception:
+        engine_path = Path(__file__).resolve().with_name("engine.py")
+        spec = importlib.util.spec_from_file_location("engine_for_strategies", engine_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)  # type: ignore[arg-type]
+        return module.GameEngine
 
 
 class Strategy(ABC):
@@ -48,6 +71,15 @@ class Strategy(ABC):
             True to stay, False to swerve
         """
         return self.decide(gamestate)
+
+    def implied_preferences(self) -> Dict[str, int]:
+        """Return preference weight overrides implied by this strategy.
+        
+        By default, strategies only inherit the engine's default preferences,
+        which already encode caring about round outcomes. Subclasses can
+        override this to indicate additional cares (e.g., HP).
+        """
+        return {}
 
 
 class AlwaysStayStrategy(Strategy):
@@ -105,13 +137,16 @@ class RandomStrategy(Strategy):
         
         Args:
             player: Player identifier ("p1" or "p2")
-            seed: Optional random seed for reproducibility
+            seed: Optional random seed for reproducibility. When provided,
+                a per-instance Random object is created to ensure deterministic
+                behavior for this strategy only.
         """
         super().__init__(player)
-        import random
         if seed is not None:
-            random.seed(seed)
-        self.random = random
+            self.random = random.Random(seed)
+        else:
+            # Fall back to module-level RNG if no seed is provided.
+            self.random = random
     
     def decide(self, gamestate: Dict[str, Any]) -> bool:
         return self.random.choice([True, False])
@@ -138,6 +173,10 @@ class HPThresholdStrategy(Strategy):
         current_hp = gamestate.get(f"{self.player}_hp", 100)
         return current_hp > threshold
 
+    def implied_preferences(self) -> Dict[str, int]:
+        """HP-based strategy: player cares about HP changes."""
+        return {"hp_delta": 1}
+
 
 class AggressiveStrategy(Strategy):
     """Strategy that stays unless HP is critically low.
@@ -153,6 +192,10 @@ class AggressiveStrategy(Strategy):
         
         return current_hp > critical_threshold
 
+    def implied_preferences(self) -> Dict[str, int]:
+        """Aggressive HP-based strategy: also cares about HP."""
+        return {"hp_delta": 1}
+
 
 class DefensiveStrategy(Strategy):
     """Strategy that swerves unless HP is very high.
@@ -166,6 +209,117 @@ class DefensiveStrategy(Strategy):
         safe_threshold = hp_thresh * 2
         
         return current_hp > safe_threshold
+
+    def implied_preferences(self) -> Dict[str, int]:
+        """Defensive HP-based strategy: cares about HP safety."""
+        return {"hp_delta": 1}
+
+
+class MinimaxStrategy(Strategy):
+    """Depth-limited minimax strategy assuming resilience-based zero-sum game.
+    
+    This strategy maximizes the resilience differential U = R1 - R2 from the
+    perspective of the configured player. The opponent is assumed to choose
+    actions that minimize this value. Depth is measured in full rounds.
+    """
+    
+    def __init__(
+        self,
+        player: str,
+        depth: int = 2,
+    ):
+        """Initialize a minimax strategy.
+        
+        Args:
+            player: Player identifier ("p1" or "p2").
+            depth: Depth limit in full rounds (must be >= 1).
+        """
+        super().__init__(player)
+        if depth < 1:
+            raise ValueError(f"depth must be >= 1, got {depth}")
+        self.depth = depth
+
+        # Resolve GameEngine lazily to avoid circular imports and support
+        # different import contexts (package vs direct file import).
+        GameEngine = _load_engine_class()
+        self._EngineClass = GameEngine
+        self.resilience_threshold = GameEngine.RESILIENCE_THRESHOLD
+    
+    def decide(self, gamestate: Dict[str, Any]) -> bool:
+        """Choose 'stay' (True) or 'swerve' (False) via depth-limited minimax."""
+        best_value = float("-inf")
+        best_action = False  # default to swerve
+        
+        for my_action in (False, True):  # False=swerve, True=stay
+            value = self._min_value(gamestate, my_action, self.depth)
+            if value > best_value:
+                best_value = value
+                best_action = my_action
+        
+        return best_action
+
+    # --- Internal helpers for minimax search ---
+
+    def _evaluate_state(self, state: Dict[str, Any]) -> float:
+        """Leaf evaluation using resilience differential U = R1 - R2."""
+        u = float(state.get("resilience_diff", 0))
+        # From p1's perspective we maximize U; from p2's we maximize -U.
+        return u if self.player == "p1" else -u
+
+    def _is_terminal(self, state: Dict[str, Any]) -> bool:
+        """Check terminal conditions based on HP and resilience differential."""
+        p1_hp = state.get("p1_hp", 0)
+        p2_hp = state.get("p2_hp", 0)
+        if p1_hp <= 0 or p2_hp <= 0:
+            return True
+        
+        diff = state.get("resilience_diff", 0)
+        return abs(diff) >= self.resilience_threshold
+
+    def _simulate_round(
+        self,
+        state: Dict[str, Any],
+        my_action: bool,
+        opp_action: bool,
+    ) -> Dict[str, Any]:
+        """Simulate a single full round with fixed actions for both players."""
+        Engine = self._EngineClass
+        engine = Engine(gamestate=deepcopy(state))
+        
+        if self.player == "p1":
+            engine.play_action("p1", my_action)
+            engine.play_action("p2", opp_action)
+        else:
+            engine.play_action("p2", my_action)
+            engine.play_action("p1", opp_action)
+        
+        next_state = engine.generate_gamestate(increment_round=True)
+        return next_state
+
+    def _min_value(
+        self,
+        state: Dict[str, Any],
+        my_action: bool,
+        depth: int,
+    ) -> float:
+        """Opponent chooses an action that minimizes our eventual utility."""
+        values = []
+        for opp_action in (False, True):
+            next_state = self._simulate_round(state, my_action, opp_action)
+            if depth == 1 or self._is_terminal(next_state):
+                values.append(self._evaluate_state(next_state))
+            else:
+                values.append(self._max_value(next_state, depth - 1))
+        return min(values)
+
+    def _max_value(self, state: Dict[str, Any], depth: int) -> float:
+        """Our move again in the next round."""
+        best = float("-inf")
+        for my_action in (False, True):
+            val = self._min_value(state, my_action, depth)
+            if val > best:
+                best = val
+        return best
 
 
 class GameSimulator:
@@ -182,10 +336,7 @@ class GameSimulator:
             engine: Optional GameEngine instance. If None, creates a new one.
         """
         if engine is None:
-            try:
-                from .engine import GameEngine
-            except ImportError:
-                from engine import GameEngine
+            GameEngine = _load_engine_class()
             engine = GameEngine()
         self.engine = engine
     
@@ -216,12 +367,35 @@ class GameSimulator:
         if p2_strategy.player != "p2":
             raise ValueError(f"p2_strategy must have player='p2', got '{p2_strategy.player}'")
         
-        # Run the game
+        # Prepare initial gamestate with per-player preferences merged from
+        # strategy-implied preferences and engine defaults.
+        base_gamestate: Dict[str, Any]
+        if initial_gamestate is None:
+            base_gamestate = self.engine.get_gamestate()
+        else:
+            base_gamestate = deepcopy(initial_gamestate)
+
+        # Ensure preference dicts exist by seeding from engine defaults if needed.
+        GameEngine = _load_engine_class()
+        default_state = GameEngine.DEFAULT_GAMESTATE
+        if "p1_preferences" not in base_gamestate:
+            base_gamestate["p1_preferences"] = deepcopy(default_state.get("p1_preferences", {}))
+        if "p2_preferences" not in base_gamestate:
+            base_gamestate["p2_preferences"] = deepcopy(default_state.get("p2_preferences", {}))
+
+        # Merge in strategy-implied preferences (e.g., HP-based strategies
+        # indicate they care about HP via a non-zero hp_delta weight).
+        p1_prefs = base_gamestate["p1_preferences"]
+        p2_prefs = base_gamestate["p2_preferences"]
+        p1_prefs.update(getattr(p1_strategy, "implied_preferences")())
+        p2_prefs.update(getattr(p2_strategy, "implied_preferences")())
+
+        # Run the game with the enriched initial gamestate.
         history = self.engine.run_game(
             max_rounds=max_rounds,
             p1_strategy=p1_strategy,
             p2_strategy=p2_strategy,
-            initial_gamestate=initial_gamestate
+            initial_gamestate=base_gamestate,
         )
         
         final_state = history[-1] if history else self.engine.get_gamestate()

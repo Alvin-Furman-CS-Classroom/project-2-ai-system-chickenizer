@@ -20,7 +20,8 @@ from strategies import (  # type: ignore
     HPThresholdStrategy,
     AggressiveStrategy,
     DefensiveStrategy,
-    GameSimulator
+    MinimaxStrategy,
+    GameSimulator,
 )
 from engine import GameEngine  # type: ignore
 
@@ -115,9 +116,73 @@ def main():
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
         max_rounds=6,
-        initial_gamestate=DEFAULT_GAMESTATE.copy()
+        initial_gamestate=DEFAULT_GAMESTATE.copy(),
     )
     
+    simulator.print_summary(result)
+    print("\n")
+
+    print("Example 5: Minimax vs Always Swerve")
+    print("-" * 60)
+
+    p1_strategy = MinimaxStrategy("p1", depth=2)
+    p2_strategy = AlwaysSwerveStrategy("p2")
+
+    result = simulator.simulate(
+        p1_strategy=p1_strategy,
+        p2_strategy=p2_strategy,
+        max_rounds=8,
+        initial_gamestate=DEFAULT_GAMESTATE.copy(),
+    )
+
+    simulator.print_summary(result)
+    print("\n")
+
+    print("Example 6: Minimax vs Always Stay")
+    print("-" * 60)
+
+    p1_strategy = MinimaxStrategy("p1", depth=2)
+    p2_strategy = AlwaysStayStrategy("p2")
+
+    result = simulator.simulate(
+        p1_strategy=p1_strategy,
+        p2_strategy=p2_strategy,
+        max_rounds=8,
+        initial_gamestate=DEFAULT_GAMESTATE.copy(),
+    )
+
+    simulator.print_summary(result)
+    print("\n")
+
+    print("Example 7: Minimax vs Tit-for-Tat")
+    print("-" * 60)
+
+    p1_strategy = MinimaxStrategy("p1", depth=2)
+    p2_strategy = TitForTatStrategy("p2")
+
+    result = simulator.simulate(
+        p1_strategy=p1_strategy,
+        p2_strategy=p2_strategy,
+        max_rounds=10,
+        initial_gamestate=DEFAULT_GAMESTATE.copy(),
+    )
+
+    simulator.print_summary(result)
+    print("\n")
+
+    print("Example 8: Minimax vs Defensive")
+    print("-" * 60)
+
+    p1_strategy = MinimaxStrategy("p1", depth=2)
+    p2_strategy = DefensiveStrategy("p2")
+
+    result = simulator.simulate(
+        p1_strategy=p1_strategy,
+        p2_strategy=p2_strategy,
+        max_rounds=10,
+        initial_gamestate=DEFAULT_GAMESTATE.copy(),
+    )
+
     simulator.print_summary(result)
 
 
