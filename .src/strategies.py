@@ -23,7 +23,7 @@ def _load_engine_class():
     try:
         from .engine import GameEngine  # type: ignore
         return GameEngine
-    except Exception:
+    except ImportError:
         engine_path = Path(__file__).resolve().with_name("engine.py")
         spec = importlib.util.spec_from_file_location("engine_for_strategies", engine_path)
         module = importlib.util.module_from_spec(spec)
@@ -387,8 +387,8 @@ class GameSimulator:
         # indicate they care about HP via a non-zero hp_delta weight).
         p1_prefs = base_gamestate["p1_preferences"]
         p2_prefs = base_gamestate["p2_preferences"]
-        p1_prefs.update(getattr(p1_strategy, "implied_preferences")())
-        p2_prefs.update(getattr(p2_strategy, "implied_preferences")())
+        p1_prefs.update(p1_strategy.implied_preferences())
+        p2_prefs.update(p2_strategy.implied_preferences())
 
         # Run the game with the enriched initial gamestate.
         history = self.engine.run_game(
