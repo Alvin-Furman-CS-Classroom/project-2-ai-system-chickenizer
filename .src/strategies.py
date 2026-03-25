@@ -3,6 +3,14 @@ Strategy system for Chickenizer game.
 
 Provides a Strategy base class and concrete strategy implementations that can be
 assigned to players and used with the GameEngine to simulate games.
+
+Agent API: autonomous players implement ``Strategy`` with ``decide(gamestate) -> bool``
+(stay vs swerve). ``GameEngine.run_game`` and ``GameSimulator`` use that interface;
+future policies (e.g. RL) can subclass ``Strategy`` without changing the engine.
+
+Sequential vs one-shot Nash: ``GameEngine.run_game`` is turn-based (P1 then P2).
+``nash_normal_form`` analyzes a simultaneous one-shot round (both actions fixed,
+then resolved), consistent with ``MinimaxStrategy`` joint-action simulation.
 """
 
 from typing import Dict, Any, Optional
@@ -33,11 +41,10 @@ def _load_engine_class():
 
 
 class Strategy(ABC):
-    """Base class for player strategies in the Chicken game.
-    
-    Strategies decide whether a player should "stay" (True) or "swerve" (False)
-    based on the current game state. Subclasses should implement the decide()
-    method to define specific strategy behaviors.
+    """Player policy interface: map a gamestate to stay (True) or swerve (False).
+
+    Subclasses implement ``decide``. ``implied_preferences()`` optionally declares
+    outcome weights merged into gamestate for simulation and normal-form payoffs.
     """
     
     def __init__(self, player: str):
@@ -80,6 +87,35 @@ class Strategy(ABC):
         override this to indicate additional cares (e.g., HP).
         """
         return {}
+
+
+def merge_strategy_preferences(
+    base_gamestate: Dict[str, Any],
+    p1_strategy: "Strategy",
+    p2_strategy: "Strategy",
+) -> Dict[str, Any]:
+    """Deep-copy ``base_gamestate`` and merge each strategy's ``implied_preferences``.
+
+    Ensures ``p1_preferences`` / ``p2_preferences`` exist (from engine defaults if
+    missing), then overlays implied weights. Used by ``GameSimulator`` and
+    ``nash_normal_form``.
+    """
+    state = deepcopy(base_gamestate)
+    GameEngine = _load_engine_class()
+    default_state = GameEngine.DEFAULT_GAMESTATE
+    if "p1_preferences" not in state:
+        state["p1_preferences"] = deepcopy(default_state.get("p1_preferences", {}))
+    if "p2_preferences" not in state:
+        state["p2_preferences"] = deepcopy(default_state.get("p2_preferences", {}))
+    state["p1_preferences"] = {
+        **state["p1_preferences"],
+        **p1_strategy.implied_preferences(),
+    }
+    state["p2_preferences"] = {
+        **state["p2_preferences"],
+        **p2_strategy.implied_preferences(),
+    }
+    return state
 
 
 class AlwaysStayStrategy(Strategy):
@@ -367,28 +403,15 @@ class GameSimulator:
         if p2_strategy.player != "p2":
             raise ValueError(f"p2_strategy must have player='p2', got '{p2_strategy.player}'")
         
-        # Prepare initial gamestate with per-player preferences merged from
-        # strategy-implied preferences and engine defaults.
-        base_gamestate: Dict[str, Any]
+        # Prepare initial gamestate with per-player preferences merged from strategies.
         if initial_gamestate is None:
-            base_gamestate = self.engine.get_gamestate()
+            base_gamestate = merge_strategy_preferences(
+                self.engine.get_gamestate(), p1_strategy, p2_strategy
+            )
         else:
-            base_gamestate = deepcopy(initial_gamestate)
-
-        # Ensure preference dicts exist by seeding from engine defaults if needed.
-        GameEngine = _load_engine_class()
-        default_state = GameEngine.DEFAULT_GAMESTATE
-        if "p1_preferences" not in base_gamestate:
-            base_gamestate["p1_preferences"] = deepcopy(default_state.get("p1_preferences", {}))
-        if "p2_preferences" not in base_gamestate:
-            base_gamestate["p2_preferences"] = deepcopy(default_state.get("p2_preferences", {}))
-
-        # Merge in strategy-implied preferences (e.g., HP-based strategies
-        # indicate they care about HP via a non-zero hp_delta weight).
-        p1_prefs = base_gamestate["p1_preferences"]
-        p2_prefs = base_gamestate["p2_preferences"]
-        p1_prefs.update(p1_strategy.implied_preferences())
-        p2_prefs.update(p2_strategy.implied_preferences())
+            base_gamestate = merge_strategy_preferences(
+                initial_gamestate, p1_strategy, p2_strategy
+            )
 
         # Run the game with the enriched initial gamestate.
         history = self.engine.run_game(

@@ -24,6 +24,7 @@ from strategies import (  # type: ignore
     GameSimulator,
 )
 from engine import GameEngine  # type: ignore
+from nash_normal_form import analyze_normal_form, format_nash_table  # type: ignore
 
 
 # Default gamestate with full HP for resetting between games
@@ -315,6 +316,20 @@ def main():
 
     simulator.print_summary(result)
     print_resilience_summary(result)
+    print("\n")
+
+    print("Example 13: One-shot normal form & Nash (simultaneous round abstraction)")
+    print("-" * 60)
+    print(
+        "Payoffs are resilience after one counterfactual round per action pair.\n"
+        "This is not the same as turn-based run_game (P1 moves, then P2).\n"
+    )
+    nash_result = analyze_normal_form(
+        AlwaysSwerveStrategy("p1"),
+        AlwaysSwerveStrategy("p2"),
+        include_mixed=True,
+    )
+    print(format_nash_table(nash_result))
 
 
 if __name__ == "__main__":
