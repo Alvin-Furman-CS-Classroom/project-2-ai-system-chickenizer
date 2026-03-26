@@ -14,3 +14,6 @@ seaborn>=0.12.0        # Enhanced statistical visualizations
 
 # Testing
 pytest>=7.4.0          # Unit and integration testing
+
+# UI (dashboard)
+streamlit>=1.32.0      # Simple Python UI for demos

@@ -120,20 +120,20 @@ class TestStatefulStrategiesBehavior:
         engine = GameEngine()
         gs = engine.get_gamestate()
 
-        agg = AggressiveStrategy("p1")
-        defn = DefensiveStrategy("p2")
+        aggressive = AggressiveStrategy("p1")
+        defensive = DefensiveStrategy("p2")
 
         # Defaults: hp=100, hp_thresh=20 => both well above thresholds
-        assert agg(gs) is True  # aggressive: stays
-        assert defn(gs) is True  # defensive: HP is very high, so stay
+        assert aggressive(gs) is True  # aggressive: stays
+        assert defensive(gs) is True  # defensive: HP is very high, so stay
 
         gs_low = dict(gs)
         gs_low["p1_hp"] = 5
         gs_low["p2_hp"] = 25
 
         # Now p1 is critically low, p2 is only a bit above threshold
-        assert agg(gs_low) is False
-        assert defn(gs_low) is False
+        assert aggressive(gs_low) is False
+        assert defensive(gs_low) is False
 
 
 class TestMinimaxStrategy:

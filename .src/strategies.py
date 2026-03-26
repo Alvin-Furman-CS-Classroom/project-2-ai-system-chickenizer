@@ -31,7 +31,7 @@ def _load_engine_class():
     try:
         from .engine import GameEngine  # type: ignore
         return GameEngine
-    except Exception:
+    except ImportError:
         engine_path = Path(__file__).resolve().with_name("engine.py")
         spec = importlib.util.spec_from_file_location("engine_for_strategies", engine_path)
         module = importlib.util.module_from_spec(spec)

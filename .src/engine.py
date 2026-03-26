@@ -21,15 +21,21 @@ class GameEngine:
     # Threshold at which resilience difference forces a tap-out.
     RESILIENCE_THRESHOLD: int = 100
 
+    # class constants
+    DEFAULT_HP = 100
+    DEFAULT_HP_THRESHOLD = 20
+    DEFAULT_CRASH_DAMAGE = 10
+
+
     DEFAULT_GAMESTATE: Dict[str, Any] = {
         "p1_stay": False,
         "p2_stay": False,
-        "p1_hp": 100,
-        "p2_hp": 100,
-        "p1_hp_thresh": 20,
-        "p2_hp_thresh": 20,
-        "p1_crash_dmg": 10,
-        "p2_crash_dmg": 10,
+        "p1_hp": DEFAULT_HP,
+        "p2_hp": DEFAULT_HP,
+        "p1_hp_thresh": DEFAULT_HP_THRESHOLD,
+        "p2_hp_thresh": DEFAULT_HP_THRESHOLD,
+        "p1_crash_dmg": DEFAULT_CRASH_DAMAGE,
+        "p2_crash_dmg": DEFAULT_CRASH_DAMAGE,
         "round": 0,
         "p1_action_history": [],
         "p2_action_history": [],
@@ -97,6 +103,64 @@ class GameEngine:
         """
         return deepcopy(self.gamestate)
 
+    def _apply_crash_damage(self) -> None:
+        """Apply crash damage to both players if both players stayed."""
+        if self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
+            self.gamestate["p1_hp"] -= self.gamestate["p1_crash_dmg"]
+            self.gamestate["p2_hp"] -= self.gamestate["p2_crash_dmg"]
+
+    def _determine_round_outcome(self) -> Optional[str]:
+        """Determine the round outcome based on the current gamestate."""
+        if self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
+            return "P1"
+        elif self.gamestate["p2_stay"] and not self.gamestate["p1_stay"]:
+            return "P2"
+        elif not self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
+            return "TIE"
+        elif self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
+            return "CRASH"
+        return None
+
+    def _update_resilience(self, old_p1_hp: int, old_p2_hp: int) -> None:
+        """Update resilience scores based on round outcome and HP changes.
+    
+        Args:
+            old_p1_hp: P1's HP before the round
+            old_p2_hp: P2's HP before the round
+        """
+        p1_prefs: Dict[str, Any] = self.gamestate.get("p1_preferences", {})
+        p2_prefs: Dict[str, Any] = self.gamestate.get("p2_preferences", {})
+        round_outcome: Optional[str] = self._determine_round_outcome()
+        
+        # Update based on round outcome
+        if round_outcome == "P1":
+            self.gamestate["p1_resilience"] += int(p1_prefs.get("round_win", 0))
+            self.gamestate["p2_resilience"] += int(p2_prefs.get("round_loss", 0))
+        elif round_outcome == "P2":
+            self.gamestate["p1_resilience"] += int(p1_prefs.get("round_loss", 0))
+            self.gamestate["p2_resilience"] += int(p2_prefs.get("round_win", 0))
+        elif round_outcome == "TIE":
+            self.gamestate["p1_resilience"] += int(p1_prefs.get("tie", 0))
+            self.gamestate["p2_resilience"] += int(p2_prefs.get("tie", 0))
+        elif round_outcome == "CRASH":
+            self.gamestate["p1_resilience"] += int(p1_prefs.get("crash", 0))
+            self.gamestate["p2_resilience"] += int(p2_prefs.get("crash", 0))
+        
+        # Update based on HP changes (for strategies that care about HP)
+        delta_p1_hp = self.gamestate["p1_hp"] - old_p1_hp
+        delta_p2_hp = self.gamestate["p2_hp"] - old_p2_hp
+        hp_weight_p1 = int(p1_prefs.get("hp_delta", 0))
+        hp_weight_p2 = int(p2_prefs.get("hp_delta", 0))
+        if delta_p1_hp != 0 and hp_weight_p1 != 0:
+            self.gamestate["p1_resilience"] += delta_p1_hp * hp_weight_p1
+        if delta_p2_hp != 0 and hp_weight_p2 != 0:
+            self.gamestate["p2_resilience"] += delta_p2_hp * hp_weight_p2
+        
+        # Update resilience differential
+        self.gamestate["resilience_diff"] = (
+            self.gamestate["p1_resilience"] - self.gamestate["p2_resilience"]
+        )
+
     def generate_gamestate(self, increment_round: bool = False) -> Dict[str, Any]:
         """Generate and return the current gamestate.
         
@@ -118,60 +182,14 @@ class GameEngine:
             old_p1_hp = self.gamestate["p1_hp"]
             old_p2_hp = self.gamestate["p2_hp"]
 
-            # Apply crash damage if both players stayed
-            if self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
-                self.gamestate["p1_hp"] -= self.gamestate["p1_crash_dmg"]
-                self.gamestate["p2_hp"] -= self.gamestate["p2_crash_dmg"]
+            self._apply_crash_damage()
 
             # Determine round outcome and update score
-            round_outcome: Optional[str] = None
-            if self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
-                round_outcome = "P1"
-            elif self.gamestate["p2_stay"] and not self.gamestate["p1_stay"]:
-                round_outcome = "P2"
-            elif not self.gamestate["p1_stay"] and not self.gamestate["p2_stay"]:
-                round_outcome = "TIE"
-            elif self.gamestate["p1_stay"] and self.gamestate["p2_stay"]:
-                round_outcome = "CRASH"
-
+            round_outcome: Optional[str] = self._determine_round_outcome()
             if round_outcome is not None:
                 self.gamestate["score"].append(round_outcome)
 
-                # Fetch per-player preference weights; default to empty dicts.
-                p1_prefs: Dict[str, Any] = self.gamestate.get("p1_preferences", {})
-                p2_prefs: Dict[str, Any] = self.gamestate.get("p2_preferences", {})
-
-                # Update resilience scores based on round outcome.
-                # Everyone cares about game results via these weights.
-                if round_outcome == "P1":
-                    self.gamestate["p1_resilience"] += int(p1_prefs.get("round_win", 0))
-                    self.gamestate["p2_resilience"] += int(p2_prefs.get("round_loss", 0))
-                elif round_outcome == "P2":
-                    self.gamestate["p1_resilience"] += int(p1_prefs.get("round_loss", 0))
-                    self.gamestate["p2_resilience"] += int(p2_prefs.get("round_win", 0))
-                elif round_outcome == "TIE":
-                    self.gamestate["p1_resilience"] += int(p1_prefs.get("tie", 0))
-                    self.gamestate["p2_resilience"] += int(p2_prefs.get("tie", 0))
-                elif round_outcome == "CRASH":
-                    self.gamestate["p1_resilience"] += int(p1_prefs.get("crash", 0))
-                    self.gamestate["p2_resilience"] += int(p2_prefs.get("crash", 0))
-
-                # Additionally, reflect HP changes in resilience so that players
-                # who care about HP (non-zero hp_delta weight) have HP gain/loss
-                # affect their score.
-                delta_p1_hp = self.gamestate["p1_hp"] - old_p1_hp
-                delta_p2_hp = self.gamestate["p2_hp"] - old_p2_hp
-                hp_weight_p1 = int(p1_prefs.get("hp_delta", 0))
-                hp_weight_p2 = int(p2_prefs.get("hp_delta", 0))
-                if delta_p1_hp != 0 and hp_weight_p1 != 0:
-                    self.gamestate["p1_resilience"] += delta_p1_hp * hp_weight_p1
-                if delta_p2_hp != 0 and hp_weight_p2 != 0:
-                    self.gamestate["p2_resilience"] += delta_p2_hp * hp_weight_p2
-
-                # Maintain resilience differential R1 - R2 used by minimax.
-                self.gamestate["resilience_diff"] = (
-                    self.gamestate["p1_resilience"] - self.gamestate["p2_resilience"]
-                )
+                self._update_resilience(old_p1_hp, old_p2_hp)
 
             # Increment round counter
             self.gamestate["round"] += 1

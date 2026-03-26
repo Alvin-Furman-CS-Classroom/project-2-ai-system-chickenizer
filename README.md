@@ -124,6 +124,15 @@ python src/module2_search.py --target-player hero --depth-limit 10
 python src/module4_simulation.py --payoff-matrix payoffs.json --turn-order hero
 ```
 
+### UI (Streamlit)
+
+On Windows, `streamlit` may not be available as a bare command if your Python Scripts
+directory is not on `PATH`. This repo supports running Streamlit via Python directly:
+
+```bash
+python -m streamlit run .src/ui/streamlit_app.py
+```
+
 ## Testing
 
 **Unit Tests** (`unit_tests/`): Mirror the structure of `src/`. Each module should have corresponding unit tests.
