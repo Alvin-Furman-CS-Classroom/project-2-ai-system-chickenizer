@@ -268,11 +268,11 @@ def main() -> None:
         p1_prefs = _preferences_ui("p1", defaults.get("p1_preferences", {}))
         p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
 
-        start_new = st.button("Start New Game", type="primary", width="stretch")
+        start_new = st.button("Start New Game", type="primary", use_container_width=True)
         step_disabled = bool(
             st.session_state.get("game_over", False) or not st.session_state.get("initialized", False)
         )
-        step_once = st.button("Play Next Round", width="stretch", disabled=step_disabled)
+        step_once = st.button("Play Next Round", use_container_width=True, disabled=step_disabled)
 
         st.divider()
         st.subheader("App control")
@@ -281,7 +281,7 @@ def main() -> None:
             value=False,
             key="allow_shutdown",
         )
-        shutdown_now = st.button("Shutdown App", type="secondary", width='stretch')
+        shutdown_now = st.button("Shutdown App", type="secondary", use_container_width=True)
         if shutdown_now and allow_shutdown:
             st.session_state["shutdown_requested"] = True
 
@@ -321,7 +321,7 @@ def main() -> None:
 
     rows = _round_rows(engine)
     st.subheader("Round history")
-    st.dataframe(rows, width='stretch')
+    st.dataframe(rows, use_container_width=True)
     if rows:
         st.subheader("Trends")
         st.line_chart(rows, x="round", y=["p1_hp", "p2_hp"])
