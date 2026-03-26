@@ -59,8 +59,20 @@ STRATEGIES: List[StrategyChoice] = [
 
 
 def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, Any]:
+    """
+    Creates UI for strategy parameters.
+
+    Args:
+        label_prefix: Prefix for the label.
+        choice: The strategy choice.
+
+    Returns:
+        A dictionary of parameters for given strategy.
+    """
     cls = choice.cls
     params: Dict[str, Any] = {}
+
+    # Establish Seed param UI
     if cls is RandomStrategy:
         seed = st.number_input(
             f"{label_prefix} seed (optional)",
@@ -71,6 +83,8 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
         )
         use_seed = st.checkbox(f"{label_prefix} use seed", value=False, key=f"{label_prefix}_random_use_seed")
         params["seed"] = int(seed) if use_seed else None
+
+    # Establish HP Threshold param UI
     if cls is HPThresholdStrategy:
         use_custom = st.checkbox(f"{label_prefix} custom HP threshold", value=False, key=f"{label_prefix}_hp_use_custom")
         params["threshold"] = (
@@ -78,6 +92,8 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
             if use_custom
             else None
         )
+
+    # Establish Minimax depth param UI
     if cls is MinimaxStrategy:
         params["depth"] = int(
             st.slider(f"{label_prefix} minimax depth (rounds)", min_value=1, max_value=6, value=2, step=1, key=f"{label_prefix}_minimax_depth")
@@ -86,7 +102,16 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
 
 
 def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
-    st.caption('Preference weights ("cares").')
+    """
+    Creates UI for player preferences.
+    Args:
+        player: The player identifier.
+        base: The base preferences.
+
+    Returns:
+        A dictionary of preferences.
+    """
+    st.caption(f'{player}\'s preference cares.')
     prefs: Dict[str, int] = {}
     cols = st.columns(5)
     for i, key in enumerate(PREFERENCE_KEYS):
@@ -96,18 +121,35 @@ def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
 
 
 def _build_strategy(choice: StrategyChoice, player: str, params: Dict[str, Any]) -> Strategy:
-    return choice.cls(player, **params)  # type: ignore[arg-type]
+    """Builds a strategy from a choice and parameters.
+    Args:
+        choice: The strategy choice.
+        player: The player identifier.
+        params: The parameters for the strategy.
+
+    Returns:
+        A strategy.
+    """
+    return choice.cls(player, **params)
 
 
 def _init_match(
     p1_choice: StrategyChoice,
-    p1_params: Dict[str, Any],
     p2_choice: StrategyChoice,
+    p1_params: Dict[str, Any],
     p2_params: Dict[str, Any],
     p1_prefs: Dict[str, int],
     p2_prefs: Dict[str, int],
     max_rounds: int,
 ) -> None:
+    """Initializes a match.
+    
+    Args:
+        choice: The strategy choice.
+        params: The parameters for the strategy.
+        prefs: The preferences for the player.
+        max_rounds: The maximum number of rounds to play.
+    """
     p1_strategy = _build_strategy(p1_choice, "p1", p1_params)
     p2_strategy = _build_strategy(p2_choice, "p2", p2_params)
 
@@ -129,6 +171,7 @@ def _init_match(
 
 
 def _advance_one_round() -> None:
+    """Advances the match by one round."""
     if not st.session_state.get("initialized"):
         return
     if st.session_state.get("game_over"):
@@ -139,6 +182,7 @@ def _advance_one_round() -> None:
     p2_strategy: Strategy = st.session_state["p2_strategy"]
     max_rounds = int(st.session_state["max_rounds"])
 
+    # max round cond
     if engine.get_gamestate().get("round", 0) >= max_rounds:
         st.session_state["game_over"] = True
         st.session_state["game_over_reason"] = "max_rounds_reached"
@@ -155,30 +199,42 @@ def _advance_one_round() -> None:
     end_state = engine.generate_gamestate(increment_round=True)
     score = end_state.get("score", [])
     outcome = score[-1] if score else None
+    # update round state
     st.session_state["last_round"] = {
         "p1_action": "stay" if p1_action else "swerve",
         "p2_action": "stay" if p2_action else "swerve",
         "outcome": outcome,
     }
 
+    # game over cond
     is_over, reason = engine.is_game_over()
     if is_over:
         st.session_state["game_over"] = True
         st.session_state["game_over_reason"] = reason
         return
+
+    # max round cond
     if end_state.get("round", 0) >= max_rounds:
         st.session_state["game_over"] = True
         st.session_state["game_over_reason"] = "max_rounds_reached"
-
+        return
 
 def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
+    """Creates a list of round rows for the match history interface.
+    Args:
+        engine: The game engine.
+
+    Returns:
+        A list of round rows to be displayed.
+    """
     by_round: Dict[int, Dict[str, Any]] = {}
     for state in engine.gamestate_history:
-        r = int(state.get("round", 0))
-        by_round[r] = state
+        rnd = int(state.get("round", 0))
+        by_round[rnd] = state
 
     rows: List[Dict[str, Any]] = []
     for round_num in sorted(by_round):
+        # skip start round - nothing to display
         if round_num == 0:
             continue
         state = by_round[round_num]
@@ -202,18 +258,26 @@ def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
 
 
 def _render_match_state(engine: GameEngine, p1_strategy: Strategy, p2_strategy: Strategy, last_round: Dict[str, Any]) -> None:
+    """Renders the match state.
+    Args:
+        engine: The game engine.
+        strategies: The strategies for the players.
+        last_round: The last round's action and outcome.
+    """
     gs = engine.get_gamestate()
     p1_hp = int(gs.get("p1_hp", 0))
     p2_hp = int(gs.get("p2_hp", 0))
     max_hp = int(GameEngine.DEFAULT_HP)
     round_num = int(gs.get("round", 0))
 
+    # match header display
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Current round", round_num)
     c2.metric("P1 HP", p1_hp)
     c3.metric("P2 HP", p2_hp)
     c4.metric("R1-R2", int(gs.get("resilience_diff", 0)))
 
+    # arena display, to be replaced with animation/graphics
     st.subheader("Arena")
     p1_col, mid_col, p2_col = st.columns([3, 2, 3])
     with p1_col:
@@ -275,9 +339,10 @@ def main() -> None:
         step_once = st.button("Play Next Round", use_container_width=True, disabled=step_disabled)
 
         st.divider()
+        # close app section
         st.subheader("App control")
         allow_shutdown = st.checkbox(
-            "I understand this will stop the Streamlit application (please do this when you're done playing)",
+            "Please click this checkbox to confirm you're done playing)",
             value=False,
             key="allow_shutdown",
         )
@@ -286,19 +351,28 @@ def main() -> None:
             st.session_state["shutdown_requested"] = True
 
     if st.session_state.get("shutdown_requested"):
-        # Browser security rules may block tab closes in some contexts, but this
-        # is the safest best-effort close signal available from the page.
+        # Best-effort: navigate away from Streamlit page first to avoid reconnect UI.
         components.html(
             """
             <script>
-                window.open('', '_self');
-                window.close();
+                try {
+                    if (window.top) {
+                        window.top.location.replace("about:blank");
+                    }
+                } catch (e) {}
+                try {
+                    window.location.replace("about:blank");
+                } catch (e) {}
+                try {
+                    window.open('', '_self');
+                    window.close();
+                } catch (e) {}
             </script>
             """,
             height=0,
         )
-        # Give the browser a moment to process the close request, then stop server.
-        time.sleep(0.35)
+        # Give the browser a moment to process navigation/close, then stop server.
+        time.sleep(0.7)
         os._exit(0)
 
     if start_new or not st.session_state.get("initialized"):
