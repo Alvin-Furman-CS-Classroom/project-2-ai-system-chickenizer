@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import signal
 from pathlib import Path
 import sys
 import time
+import traceback
 from typing import Any, Dict, List, Tuple, Type
 
 import streamlit as st
@@ -145,9 +147,9 @@ def _init_match(
     """Initializes a match.
     
     Args:
-        choice: The strategy choice.
-        params: The parameters for the strategy.
-        prefs: The preferences for the player.
+        p1_choice/p2_choice: The strategy choice for each player.
+        p1_params/p2_params: The parameters for the strategy for each player.
+        p1_prefs/p2_prefs: The preferences for the player for each player.
         max_rounds: The maximum number of rounds to play.
     """
     p1_strategy = _build_strategy(p1_choice, "p1", p1_params)
@@ -261,7 +263,7 @@ def _render_match_state(engine: GameEngine, p1_strategy: Strategy, p2_strategy: 
     """Renders the match state.
     Args:
         engine: The game engine.
-        strategies: The strategies for the players.
+        p1_strategy/p2_strategy: The strategies for the players.
         last_round: The last round's action and outcome.
     """
     gs = engine.get_gamestate()
@@ -309,6 +311,32 @@ def _render_match_state(engine: GameEngine, p1_strategy: Strategy, p2_strategy: 
         st.caption(f"HP: {p2_hp}/{max_hp}")
         st.write("Cares:", gs.get("p2_preferences", {}))
 
+def _close_ui() -> None:
+    """Closes the UI, in case of error or shutdown request."""
+    # Best-effort: navigate away from Streamlit page first to avoid reconnect UI.
+    components.html(
+        """
+        <script>
+            try {
+                if (window.top) {
+                    window.top.location.replace("about:blank");
+                }
+            } catch (e) {}
+            try {
+                window.location.replace("about:blank");
+            } catch (e) {}
+            try {
+                window.open('', '_self');
+                window.close();
+            } catch (e) {}
+        </script>
+        """,
+        height=0,
+    )
+    # Give the browser a moment to process navigation/close, then stop server.
+    time.sleep(0.7)
+    os.kill(os.getpid(), signal.SIGTERM)
+    st.stop()
 
 def main() -> None:
     st.set_page_config(page_title="Chickenizer Live Match", layout="wide")
@@ -329,7 +357,7 @@ def main() -> None:
 
         st.subheader("Player preferences (cares)")
         defaults = GameEngine.DEFAULT_GAMESTATE
-        p1_prefs = _preferences_ui("p1", defaults.get("p1_preferences", {}))
+        p1_prefs = _preferences_ui("p1", defaults.get("p1_preferences" {}))
         p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
 
         start_new = st.button("Start New Game", type="primary", use_container_width=True)
@@ -342,41 +370,19 @@ def main() -> None:
         # close app section
         st.subheader("App control")
         allow_shutdown = st.checkbox(
-            "Please click this checkbox to confirm you're done playing)",
+            "Please click this checkbox to confirm you're done playing.",
             value=False,
             key="allow_shutdown",
         )
         shutdown_now = st.button("Shutdown App", type="secondary", use_container_width=True)
         if shutdown_now and allow_shutdown:
             st.session_state["shutdown_requested"] = True
-
-    if st.session_state.get("shutdown_requested"):
-        # Best-effort: navigate away from Streamlit page first to avoid reconnect UI.
-        components.html(
-            """
-            <script>
-                try {
-                    if (window.top) {
-                        window.top.location.replace("about:blank");
-                    }
-                } catch (e) {}
-                try {
-                    window.location.replace("about:blank");
-                } catch (e) {}
-                try {
-                    window.open('', '_self');
-                    window.close();
-                } catch (e) {}
-            </script>
-            """,
-            height=0,
-        )
-        # Give the browser a moment to process navigation/close, then stop server.
-        time.sleep(0.7)
-        os._exit(0)
+            _close_ui()
+        elif shutdown_now and not allow_shutdown:
+            st.error("Please click the checkbox to confirm you're done playing.")
 
     if start_new or not st.session_state.get("initialized"):
-        _init_match(p1_choice, p1_params, p2_choice, p2_params, p1_prefs, p2_prefs, max_rounds)
+        _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
 
     if step_once:
         _advance_one_round()
@@ -403,5 +409,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
-
+    try:
+        main()
+    except Exception:
+        # Fail-fast: if the UI errors and becomes unusable, terminate the process
+        # so the terminal returns cleanly for debugging.
+        traceback.print_exc()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        _close_ui()
