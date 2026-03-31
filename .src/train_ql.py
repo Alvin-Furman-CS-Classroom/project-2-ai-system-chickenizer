@@ -263,6 +263,13 @@ def main() -> None:
     )
     parser.add_argument("--epsilon-start", type=float, default=0.25)
     parser.add_argument("--epsilon-end", type=float, default=0.05)
+    parser.add_argument(
+        "--export-q-table",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="After training, write q_table_payload JSON (for UI or analysis)",
+    )
     args = parser.parse_args()
 
     agent = QLearningStrategy("p1", seed=args.seed)
@@ -282,6 +289,11 @@ def main() -> None:
     print(f"  Score wins (episode-level): agent {stats.wins}, opp {stats.losses}, ties {stats.ties}")
     print(f"  Sum of round outcomes — P1 wins: {stats.total_p1_wins_in_score}, P2: {stats.total_p2_wins_in_score}")
     print(f"  Q table size (states): {len(agent.q)}")
+    if args.export_q_table:
+        out = Path(args.export_q_table)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        agent.write_q_table_json(out)
+        print(f"  Wrote Q-table snapshot to {out.resolve()}")
 
 
 if __name__ == "__main__":

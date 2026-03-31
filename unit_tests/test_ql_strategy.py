@@ -1,5 +1,6 @@
 """Tests for QLearningStrategy and state encoding."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -45,3 +46,40 @@ class TestQLearningSmoke:
         eng = GameEngine()
         p1.finalize_episode(eng.get_gamestate())
         p1.finalize_episode(eng.get_gamestate())
+
+
+class TestQTableExport:
+    def test_q_table_records_columns_stable(self):
+        sim = GameSimulator()
+        p1 = QLearningStrategy("p1", seed=0, epsilon=0.5)
+        p2 = AlwaysSwerveStrategy("p2")
+        sim.simulate(p1, p2, max_rounds=5)
+        rows = p1.q_table_records()
+        assert len(rows) == len(p1.q)
+        for row in rows:
+            assert set(row.keys()) == {
+                "own_res_bin",
+                "own_resilience_bin",
+                "my_last_code",
+                "my_last",
+                "opp_last_code",
+                "opp_last",
+                "q_swerve",
+                "q_stay",
+                "greedy_action",
+            }
+            assert row["greedy_action"] in ("stay", "swerve")
+
+    def test_q_table_payload_json_roundtrip(self, tmp_path):
+        sim = GameSimulator()
+        p1 = QLearningStrategy("p1", seed=2, epsilon=0.3)
+        p2 = AlwaysSwerveStrategy("p2")
+        sim.simulate(p1, p2, max_rounds=4)
+        payload = p1.q_table_payload()
+        json.dumps(payload)  # must be JSON-serializable
+        out = tmp_path / "q.json"
+        p1.write_q_table_json(out)
+        loaded = json.loads(out.read_text(encoding="utf-8"))
+        assert loaded["schema_version"] == 1
+        assert loaded["player"] == "p1"
+        assert len(loaded["rows"]) == len(payload["rows"])

@@ -8,14 +8,27 @@ effect for the acting player) plus terminal win/loss bonuses in
 
 from __future__ import annotations
 
+import json
 import random
 from collections import defaultdict
-from typing import Any, DefaultDict, Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple, Union
 
 from strategies import Strategy
 
 
 StateKey = Tuple[int, int, int]  # (own_res_bin, my_last, opp_last)
+
+# Action codes from last moves (see _act_code): 0 swerve, 1 stay, 2 unknown/start.
+_ACTION_CODE_LABEL: Dict[int, str] = {0: "swerve", 1: "stay", 2: "(none)"}
+
+
+def resilience_bin_label(bin_index: int) -> str:
+    """Human-readable label for own-resilience bin used in ``encode_ql_state``."""
+    width = 40
+    low = -80 + int(bin_index) * width
+    high = low + width - 1
+    return f"bin {bin_index} [{low}, {high}]"
 
 
 def _act_code(last_move: str) -> int:
@@ -100,6 +113,52 @@ class QLearningStrategy(Strategy):
         self._prev_s: Optional[StateKey] = None
         self._prev_a: Optional[bool] = None
         self._res_before_action: Optional[int] = None
+
+    def q_table_records(self) -> List[Dict[str, Any]]:
+        """One row per visited state: columns are stable for ``st.dataframe`` / CSV / charts."""
+        rows: List[Dict[str, Any]] = []
+        for key in sorted(self.q.keys()):
+            own_bin, my_c, opp_c = key
+            qd = self.q[key]
+            q_swerve = float(qd[False])
+            q_stay = float(qd[True])
+            greedy_stay = q_stay >= q_swerve
+            rows.append(
+                {
+                    "own_res_bin": own_bin,
+                    "own_resilience_bin": resilience_bin_label(own_bin),
+                    "my_last_code": my_c,
+                    "my_last": _ACTION_CODE_LABEL.get(my_c, str(my_c)),
+                    "opp_last_code": opp_c,
+                    "opp_last": _ACTION_CODE_LABEL.get(opp_c, str(opp_c)),
+                    "q_swerve": q_swerve,
+                    "q_stay": q_stay,
+                    "greedy_action": "stay" if greedy_stay else "swerve",
+                }
+            )
+        return rows
+
+    def q_table_payload(self) -> Dict[str, Any]:
+        """JSON-friendly snapshot for UI download APIs and inspection after training."""
+        return {
+            "schema_version": 1,
+            "player": self.player,
+            "hyperparameters": {
+                "alpha": self.alpha,
+                "gamma": self.gamma,
+                "epsilon": self.epsilon,
+                "terminal_win": self.terminal_win,
+                "terminal_loss": self.terminal_loss,
+            },
+            "visited_states": len(self.q),
+            "rows": self.q_table_records(),
+        }
+
+    def write_q_table_json(self, path: Union[str, Path]) -> None:
+        """Persist ``q_table_payload()`` for the UI or external tools."""
+        Path(path).write_text(
+            json.dumps(self.q_table_payload(), indent=2), encoding="utf-8"
+        )
 
     def reset_episode(self) -> None:
         self._prev_s = None
