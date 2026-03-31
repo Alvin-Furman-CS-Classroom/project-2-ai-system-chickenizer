@@ -414,22 +414,29 @@ class GameSimulator:
             )
 
         # Run the game with the enriched initial gamestate.
-        history = self.engine.run_game(
-            max_rounds=max_rounds,
-            p1_strategy=p1_strategy,
-            p2_strategy=p2_strategy,
-            initial_gamestate=base_gamestate,
-        )
-        
+        try:
+            history = self.engine.run_game(
+                max_rounds=max_rounds,
+                p1_strategy=p1_strategy,
+                p2_strategy=p2_strategy,
+                initial_gamestate=base_gamestate,
+            )
+        except Exception:
+            for strat in (p1_strategy, p2_strategy):
+                abandon = getattr(strat, "abandon_episode", None)
+                if callable(abandon):
+                    abandon()
+            raise
+
         final_state = history[-1] if history else self.engine.get_gamestate()
-        
+
         # Calculate summary statistics
         score = final_state.get("score", [])
         p1_wins = score.count("P1")
         p2_wins = score.count("P2")
         ties = score.count("TIE")
         crashes = score.count("CRASH")
-        
+
         summary = {
             "rounds_played": final_state.get("round", 0),
             "p1_hp": final_state.get("p1_hp", 100),
@@ -441,12 +448,19 @@ class GameSimulator:
             "p1_strategy": p1_strategy.__class__.__name__,
             "p2_strategy": p2_strategy.__class__.__name__,
         }
-        
-        return {
+
+        result_dict = {
             "history": history,
             "final_state": final_state,
-            "summary": summary
+            "summary": summary,
         }
+        fin = getattr(p1_strategy, "finalize_episode", None)
+        if callable(fin):
+            fin(final_state)
+        fin2 = getattr(p2_strategy, "finalize_episode", None)
+        if callable(fin2):
+            fin2(final_state)
+        return result_dict
     
     def print_summary(self, result: Dict[str, Any]):
         """Print a formatted summary of the game simulation.
