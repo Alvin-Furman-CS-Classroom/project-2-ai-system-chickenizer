@@ -236,6 +236,46 @@ def train_ql_agent(
     return agent, rows, stats
 
 
+def run_greedy_evaluation_episodes(
+    agent: QLearningStrategy,
+    opponent: OpponentSpec,
+    *,
+    episodes: int,
+    max_rounds: int = 15,
+    agent_plays_p1: bool = True,
+    minimax_depth: int = 2,
+    random_seed: Optional[int] = None,
+) -> TrainingRunStats:
+    """Evaluate the current Q-policy without learning (greedy actions only).
+
+    Temporarily sets ``learn=False`` and ``epsilon=0``, runs the same episode loop
+    as ``train_ql_agent``, then restores the previous ``learn`` and ``epsilon``.
+    """
+    if episodes < 1:
+        raise ValueError("episodes must be >= 1")
+
+    saved_learn = agent.learn
+    saved_eps = agent.epsilon
+    agent.learn = False
+    agent.epsilon = 0.0
+    try:
+        _, _, stats = train_ql_agent(
+            agent,
+            opponent,
+            episodes=episodes,
+            max_rounds=max_rounds,
+            agent_plays_p1=agent_plays_p1,
+            epsilon_start=0.0,
+            epsilon_end=0.0,
+            minimax_depth=minimax_depth,
+            random_seed=random_seed,
+        )
+        return stats
+    finally:
+        agent.learn = saved_learn
+        agent.epsilon = saved_eps
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Train Q-learning vs built-in or custom opponent (see make_opponent_by_name)"

@@ -84,27 +84,51 @@ def build_payoff_matrices(
     return payoff_p1, payoff_p2
 
 
+def best_response_correspondences(
+    payoff_p1: Sequence[Sequence[int]],
+    payoff_p2: Sequence[Sequence[int]],
+) -> Dict[str, Any]:
+    """Pure best-response sets for the 2×2 normal form.
+
+    Row index i and column index j follow ``ACTION_ORDER`` / ``ACTION_LABELS``
+    (0 = Swerve, 1 = Stay for each player).
+
+    Returns:
+        ``p1_best_rows_given_p2_col``: for each P2 column j, list of P1 row indices
+        that maximize P1's payoff in that column.
+        ``p2_best_cols_given_p1_row``: for each P1 row i, list of P2 column indices
+        that maximize P2's payoff in that row.
+    """
+    br_p1_by_col: List[List[int]] = []
+    for j in range(2):
+        col = [payoff_p1[i][j] for i in range(2)]
+        best = max(col)
+        br_p1_by_col.append([i for i in range(2) if payoff_p1[i][j] == best])
+
+    br_p2_by_row: List[List[int]] = []
+    for i in range(2):
+        row = [payoff_p2[i][j] for j in range(2)]
+        best = max(row)
+        br_p2_by_row.append([j for j in range(2) if payoff_p2[i][j] == best])
+
+    return {
+        "p1_best_rows_given_p2_col": br_p1_by_col,
+        "p2_best_cols_given_p1_row": br_p2_by_row,
+    }
+
+
 def find_pure_nash(
     payoff_p1: Sequence[Sequence[int]],
     payoff_p2: Sequence[Sequence[int]],
 ) -> List[Tuple[int, int]]:
     """Indices (i, j) that are pure-strategy Nash equilibria."""
-    br_p1: Dict[int, List[int]] = {}
-    for j in range(2):
-        col = [payoff_p1[i][j] for i in range(2)]
-        best = max(col)
-        br_p1[j] = [i for i in range(2) if payoff_p1[i][j] == best]
-
-    br_p2: Dict[int, List[int]] = {}
-    for i in range(2):
-        row = [payoff_p2[i][j] for j in range(2)]
-        best = max(row)
-        br_p2[i] = [j for j in range(2) if payoff_p2[i][j] == best]
-
+    br = best_response_correspondences(payoff_p1, payoff_p2)
+    p1_br = br["p1_best_rows_given_p2_col"]
+    p2_br = br["p2_best_cols_given_p1_row"]
     out: List[Tuple[int, int]] = []
     for i in range(2):
         for j in range(2):
-            if i in br_p1[j] and j in br_p2[i]:
+            if i in p1_br[j] and j in p2_br[i]:
                 out.append((i, j))
     return out
 
@@ -166,6 +190,39 @@ def analyze_normal_form(
         pure_nash_indices=pure,
         mixed_equilibria=mixed,
     )
+
+
+def normal_form_to_dict(
+    result: NormalFormResult,
+    *,
+    include_best_responses: bool = True,
+) -> Dict[str, Any]:
+    """JSON-friendly snapshot of a normal-form analysis (for UI/APIs).
+
+    ``pure_nash_indices`` entries are ``[row_i, col_j]`` lists.
+    Mixed equilibria use parallel lists ``p1_probs_swerve_stay`` and
+    ``p2_probs_swerve_stay`` (same order as ``ACTION_ORDER``).
+    """
+    out: Dict[str, Any] = {
+        "p1_strategy_name": result.p1_strategy_name,
+        "p2_strategy_name": result.p2_strategy_name,
+        "action_labels": list(result.action_labels),
+        "payoff_p1": [list(row) for row in result.payoff_p1],
+        "payoff_p2": [list(row) for row in result.payoff_p2],
+        "pure_nash_indices": [[int(i), int(j)] for i, j in result.pure_nash_indices],
+        "mixed_equilibria": [
+            {
+                "p1_probs_swerve_stay": list(sig),
+                "p2_probs_swerve_stay": list(rho),
+            }
+            for sig, rho in result.mixed_equilibria
+        ],
+    }
+    if include_best_responses:
+        out["best_responses"] = best_response_correspondences(
+            result.payoff_p1, result.payoff_p2
+        )
+    return out
 
 
 def format_nash_table(result: NormalFormResult) -> str:

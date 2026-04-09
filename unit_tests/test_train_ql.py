@@ -12,7 +12,11 @@ if str(_SRC) not in sys.path:
 
 from ql_strategy import QLearningStrategy  # noqa: E402
 from strategies import AlwaysSwerveStrategy, GameSimulator  # noqa: E402
-from train_ql import make_opponent_by_name, train_ql_agent  # noqa: E402
+from train_ql import (  # noqa: E402
+    make_opponent_by_name,
+    run_greedy_evaluation_episodes,
+    train_ql_agent,
+)
 
 
 class TestMakeOpponentByName:
@@ -48,6 +52,20 @@ class TestTrainQlAgent:
         )
         assert stats.episodes == 4
         assert "TitForTat" in stats.opponent
+
+
+class TestRunGreedyEvaluationEpisodes:
+    def test_no_learning_and_restores_flags(self):
+        agent = QLearningStrategy("p1", seed=3)
+        agent.learn = True
+        agent.epsilon = 0.2
+        train_ql_agent(agent, "always_swerve", episodes=2, max_rounds=4)
+        stats = run_greedy_evaluation_episodes(
+            agent, "always_swerve", episodes=2, max_rounds=4
+        )
+        assert stats.episodes == 2
+        assert agent.learn is True
+        assert agent.epsilon == 0.2
 
 
 class TestSimulateAbandonOnFailure:

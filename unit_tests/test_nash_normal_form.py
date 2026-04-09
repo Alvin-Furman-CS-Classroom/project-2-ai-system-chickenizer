@@ -98,6 +98,41 @@ class TestAnalyzeAndFormat:
         assert "σ=" in t
 
 
+class TestBestResponseCorrespondences:
+    def test_classic_chicken(self):
+        p1_m = [[0, -10], [10, -15]]
+        p2_m = [[0, 10], [-10, -15]]
+        br = nash_nf.best_response_correspondences(p1_m, p2_m)
+        assert br["p1_best_rows_given_p2_col"] == [[1], [0]]
+        assert br["p2_best_cols_given_p1_row"] == [[1], [0]]
+
+
+class TestNormalFormToDict:
+    def test_shape_and_pure_nash(self):
+        r = nash_nf.analyze_normal_form(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            include_mixed=False,
+        )
+        d = nash_nf.normal_form_to_dict(r, include_best_responses=True)
+        assert d["p1_strategy_name"] == "AlwaysSwerveStrategy"
+        assert d["action_labels"] == ["Swerve", "Stay"]
+        assert len(d["payoff_p1"]) == 2 and len(d["payoff_p1"][0]) == 2
+        assert {tuple(x) for x in d["pure_nash_indices"]} == {(1, 0), (0, 1)}
+        br = d["best_responses"]
+        assert br["p1_best_rows_given_p2_col"] == [[1], [0]]
+        assert br["p2_best_cols_given_p1_row"] == [[1], [0]]
+
+    def test_without_best_responses(self):
+        r = nash_nf.analyze_normal_form(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            include_mixed=False,
+        )
+        d = nash_nf.normal_form_to_dict(r, include_best_responses=False)
+        assert "best_responses" not in d
+
+
 class TestMergeStrategyPreferences:
     def test_merge_combines_implied_prefs(self):
         eng = GameEngine()
