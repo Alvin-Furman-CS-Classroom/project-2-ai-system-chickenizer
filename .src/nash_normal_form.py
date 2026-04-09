@@ -268,6 +268,187 @@ def format_nash_table(result: NormalFormResult) -> str:
     return "\n".join(lines)
 
 
+# Width of each matrix cell interior (ASCII grid).
+_ASCII_CELL_WIDTH = 22
+
+
+def _nash_cell_text(
+    u1: int, u2: int, is_pure_ne: bool, width: int = _ASCII_CELL_WIDTH
+) -> str:
+    body = f"({u1},{u2})"
+    if is_pure_ne:
+        body += " *NE*"
+    if len(body) > width:
+        body = body[: max(0, width - 1)] + "…"
+    return body.ljust(width)
+
+
+def format_nash_grid_ascii(
+    result: NormalFormResult,
+    *,
+    include_header: bool = True,
+    header_title: str = "One-shot normal form (resilience utilities)",
+    inner_width: int = _ASCII_CELL_WIDTH,
+    include_mixed_footer: bool = True,
+) -> str:
+    """Draw a 2×2 matrix with borders; pure Nash cells tagged ``*NE*``.
+
+    Set ``include_header=False`` for embedded panels (e.g. hypothesis vs final).
+    """
+    ne_set = set(result.pure_nash_indices)
+    lbl = result.action_labels
+    row_w = max(len("P1 " + lbl[0]), len("P1 " + lbl[1]), 6)
+    bar = "+" + "+".join("-" * (inner_width + 2) for _ in range(2)) + "+"
+
+    lines: List[str] = []
+    if include_header:
+        lines.append(header_title)
+        lines.append(
+            f"P1: {result.p1_strategy_name}  vs  P2: {result.p2_strategy_name}"
+        )
+        lines.append("")
+
+    # Column labels (P2 actions), then top rule.
+    lines.append(
+        f"{'':>{row_w}}  "
+        f"{'P2 ' + lbl[0]:<{inner_width + 3}}  "
+        f"{'P2 ' + lbl[1]:<{inner_width + 3}}"
+    )
+    lines.append(f"{'':>{row_w}} {bar}")
+    for i, row_lbl in enumerate(lbl):
+        cells = "|".join(
+            f" {_nash_cell_text(result.payoff_p1[i][j], result.payoff_p2[i][j], (i, j) in ne_set, inner_width)} "
+            for j in range(2)
+        )
+        lines.append(f"{'P1 ' + row_lbl:>{row_w}} |{cells}|")
+        lines.append(f"{'':>{row_w}} {bar}")
+    lines.append("")
+    lines.append(
+        f"Pure NE (row_i, col_j): {result.pure_nash_indices or 'none'}"
+    )
+    if include_mixed_footer and result.mixed_equilibria:
+        lines.append("Mixed NE (σ swerve/stay, ρ swerve/stay):")
+        for sig, rho in result.mixed_equilibria:
+            lines.append(f"  σ={sig}  ρ={rho}")
+    elif include_mixed_footer:
+        lines.append("Mixed NE: (none or not computed)")
+    return "\n".join(lines)
+
+
+def _nash_comparison_footer(
+    hypothesis: NormalFormResult, final: NormalFormResult
+) -> str:
+    same_matrix = (
+        hypothesis.payoff_p1 == final.payoff_p1
+        and hypothesis.payoff_p2 == final.payoff_p2
+    )
+    same_pure = set(hypothesis.pure_nash_indices) == set(final.pure_nash_indices)
+    return "\n".join(
+        [
+            "--- Comparison ---",
+            f"Payoff matrices identical: {same_matrix}",
+            f"Pure NE set identical: {same_pure}",
+            f"  hypothesis pure NE: {sorted(hypothesis.pure_nash_indices)}",
+            f"  final pure NE:      {sorted(final.pure_nash_indices)}",
+        ]
+    )
+
+
+def format_nash_hypothesis_vs_final_ascii(
+    hypothesis: NormalFormResult,
+    final: NormalFormResult,
+    *,
+    hypothesis_caption: str = "Hypothesis NE (pre-match normal form)",
+    final_caption: str = "Final NE (one-shot form using post-match gamestate)",
+) -> str:
+    """Stack two ASCII grids plus a short comparison footer.
+
+    ``hypothesis`` is typically ``analyze_normal_form`` on the starting state;
+    ``final`` uses the same strategies on ``final_state`` after a simulation.
+    """
+    blocks = [
+        "=" * 62,
+        hypothesis_caption,
+        format_nash_grid_ascii(
+            hypothesis, include_header=False, include_mixed_footer=False
+        ),
+        "",
+        "=" * 62,
+        final_caption,
+        format_nash_grid_ascii(
+            final, include_header=False, include_mixed_footer=False
+        ),
+        "",
+        _nash_comparison_footer(hypothesis, final),
+    ]
+    return "\n".join(blocks)
+
+
+def report_match_hypothesis_vs_final_nash(
+    p1_strategy: Strategy,
+    p2_strategy: Strategy,
+    *,
+    max_rounds: int = 10,
+    initial_gamestate: Optional[Dict[str, Any]] = None,
+    include_mixed: bool = False,
+) -> str:
+    """Simulate a match, then ASCII-report hypothesis vs post-match normal-form NE.
+
+    The one-shot payoffs for the "final" panel use ``merge_strategy_preferences``
+    on a deep copy of the match ``final_state`` (HP, etc.), so the matrix can
+    differ from the hypothesis when injuries change counterfactual round utilities.
+
+    Uses a lazy import of ``GameSimulator`` to limit import cycles.
+    """
+    try:
+        from .strategies import GameSimulator
+    except ImportError:
+        from strategies import GameSimulator  # type: ignore
+
+    if initial_gamestate is None:
+        base_for_hyp = GameEngine().get_gamestate()
+    else:
+        base_for_hyp = deepcopy(initial_gamestate)
+
+    hypothesis = analyze_normal_form(
+        p1_strategy,
+        p2_strategy,
+        base_for_hyp,
+        include_mixed=include_mixed,
+    )
+    sim = GameSimulator()
+    outcome = sim.simulate(
+        p1_strategy,
+        p2_strategy,
+        max_rounds=max_rounds,
+        initial_gamestate=initial_gamestate,
+    )
+    final_gs = deepcopy(outcome["final_state"])
+    final = analyze_normal_form(
+        p1_strategy,
+        p2_strategy,
+        final_gs,
+        include_mixed=include_mixed,
+    )
+    summ = outcome.get("summary", {})
+    header = (
+        f"Match recap: max_rounds={max_rounds}  |  "
+        f"episode wins P1={summ.get('p1_wins')}  P2={summ.get('p2_wins')}"
+    )
+    return "\n".join(
+        [
+            header,
+            "",
+            format_nash_hypothesis_vs_final_ascii(
+                hypothesis,
+                final,
+                hypothesis_caption="Hypothesis NE (pre-match normal form)",
+                final_caption="Final NE (post-match gamestate → one-shot matrix)",
+            ),
+        ]
+    )
+
+
 if __name__ == "__main__":
     try:
         from .strategies import AlwaysStayStrategy, AlwaysSwerveStrategy

@@ -1,6 +1,19 @@
-"""Tests for one-shot normal-form Nash construction and equilibrium detection."""
+"""Tests for one-shot normal-form Nash construction and equilibrium detection.
+
+Visual smoke (print ASCII grids to the terminal)::
+
+    pytest -s unit_tests/test_nash_normal_form.py::TestNashAsciiVisual::test_print_sample_match_report -v
+
+**Hypothesis vs final NE:** With the current engine, one-shot payoffs depend on merged
+preferences and damage parameters in gamestate, but *not* on absolute HP (each cell
+uses the HP *change* within that counterfactual round). So a typical match that only
+lowers HP often leaves the normal form — and pure NE — unchanged vs the hypothesis.
+NE sets *can* diverge when post-match state differs in preference weights or damage
+parameters (see ``TestHypothesisVsFinalNashDivergence``).
+"""
 
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -12,9 +25,10 @@ if str(_SRC) not in sys.path:
 import nash_normal_form as nash_nf  # noqa: E402
 from engine import GameEngine  # noqa: E402
 from strategies import (  # noqa: E402
+    AggressiveStrategy,
     AlwaysStayStrategy,
     AlwaysSwerveStrategy,
-    AggressiveStrategy,
+    DefensiveStrategy,
     HPThresholdStrategy,
     merge_strategy_preferences,
 )
@@ -131,6 +145,111 @@ class TestNormalFormToDict:
         )
         d = nash_nf.normal_form_to_dict(r, include_best_responses=False)
         assert "best_responses" not in d
+
+
+class TestHypothesisVsFinalNashDivergence:
+    """Hypothesis vs final pure NE need not match when gamestate inputs to the form differ."""
+
+    def test_pure_ne_differs_when_merged_preferences_differ(self):
+        """Stronger P1 round_win in the *base* gamestate shifts pure NE (same strategies)."""
+        base = GameEngine().get_gamestate()
+        skewed = deepcopy(base)
+        skewed["p1_preferences"] = {
+            **dict(skewed["p1_preferences"]),
+            "round_win": 50,
+            "round_loss": -50,
+        }
+        p1, p2 = AlwaysSwerveStrategy("p1"), AlwaysSwerveStrategy("p2")
+        hyp = nash_nf.analyze_normal_form(
+            p1, p2, base, include_mixed=False
+        )
+        fin = nash_nf.analyze_normal_form(
+            p1, p2, skewed, include_mixed=False
+        )
+        assert hyp.payoff_p1 != fin.payoff_p1
+        assert set(hyp.pure_nash_indices) != set(fin.pure_nash_indices)
+        assert set(hyp.pure_nash_indices) == {(0, 1), (1, 0)}
+        assert set(fin.pure_nash_indices) == {(1, 0)}
+
+    def test_ascii_comparison_flags_non_equivalent_ne(self):
+        base = GameEngine().get_gamestate()
+        skewed = deepcopy(base)
+        skewed["p1_preferences"] = {
+            **dict(skewed["p1_preferences"]),
+            "round_win": 50,
+            "round_loss": -50,
+        }
+        p1, p2 = AlwaysSwerveStrategy("p1"), AlwaysSwerveStrategy("p2")
+        hyp = nash_nf.analyze_normal_form(p1, p2, base, include_mixed=False)
+        fin = nash_nf.analyze_normal_form(p1, p2, skewed, include_mixed=False)
+        block = nash_nf.format_nash_hypothesis_vs_final_ascii(hyp, fin)
+        assert "Payoff matrices identical: False" in block
+        assert "Pure NE set identical: False" in block
+
+    def test_hp_only_change_leaves_one_shot_matrix_and_pure_ne_unchanged(self):
+        """Resilience HP terms use ΔHP within the round, not starting HP (see engine)."""
+        base = GameEngine().get_gamestate()
+        hurt = deepcopy(base)
+        hurt["p1_hp"] = 14
+        hurt["p2_hp"] = 22
+        p1, p2 = AggressiveStrategy("p1"), AlwaysSwerveStrategy("p2")
+        a = nash_nf.analyze_normal_form(p1, p2, base, include_mixed=False)
+        b = nash_nf.analyze_normal_form(p1, p2, hurt, include_mixed=False)
+        assert a.payoff_p1 == b.payoff_p1 and a.payoff_p2 == b.payoff_p2
+        assert set(a.pure_nash_indices) == set(b.pure_nash_indices)
+
+
+class TestNashAsciiVisual:
+    def test_grid_tags_pure_nash_cells(self):
+        r = nash_nf.analyze_normal_form(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            include_mixed=False,
+        )
+        art = nash_nf.format_nash_grid_ascii(r, include_mixed_footer=False)
+        assert "*NE*" in art
+        assert "(0,0)" in art or "(0, 0)" in art.replace(" ", "")
+        assert "Pure NE (row_i, col_j):" in art
+
+    def test_hypothesis_vs_final_report_includes_comparison(self):
+        report = nash_nf.report_match_hypothesis_vs_final_nash(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            max_rounds=4,
+            include_mixed=False,
+        )
+        assert "Hypothesis NE (pre-match normal form)" in report
+        assert "Final NE (post-match gamestate" in report
+        assert "Payoff matrices identical:" in report
+        assert "Pure NE set identical:" in report
+        assert "Match recap:" in report
+
+    def test_stacked_hypothesis_final_ascii(self):
+        hyp = nash_nf.analyze_normal_form(
+            AlwaysStayStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            include_mixed=False,
+        )
+        fin = nash_nf.analyze_normal_form(
+            AlwaysStayStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+            include_mixed=False,
+        )
+        block = nash_nf.format_nash_hypothesis_vs_final_ascii(hyp, fin)
+        assert "*NE*" in block
+        assert "--- Comparison ---" in block
+        assert "+" in block and "|" in block
+
+    def test_print_sample_match_report(self):
+        """Run with ``pytest -s`` to view hypothesis vs final NE ASCII side by side."""
+        report = nash_nf.report_match_hypothesis_vs_final_nash(
+            AggressiveStrategy("p1"),
+            DefensiveStrategy("p2"),
+            max_rounds=8,
+            include_mixed=False,
+        )
+        print("\n" + report + "\n")
+        assert "hypothesis pure NE:" in report
 
 
 class TestMergeStrategyPreferences:
