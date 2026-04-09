@@ -186,6 +186,16 @@ class TestGameSimulatorIntegration:
         assert summary["p2_wins"] == 0
         assert summary["crashes"] == 0
 
+    def test_consecutive_simulates_fresh_hp_each_match(self):
+        """Same ``GameSimulator`` must not reuse 0 HP from a finished crash-heavy game."""
+        sim = GameSimulator()
+        p1 = AlwaysStayStrategy("p1")
+        p2 = AlwaysStayStrategy("p2")
+        r1 = sim.simulate(p1, p2, max_rounds=20)
+        r2 = sim.simulate(p1, p2, max_rounds=20)
+        assert len(r1["final_state"].get("score") or []) > 0
+        assert len(r2["final_state"].get("score") or []) > 0
+
     def test_minimax_vs_always_swerve_resilience_increases(self):
         """Minimax vs always-swerve should lead to positive resilience_diff for p1."""
         engine = GameEngine()

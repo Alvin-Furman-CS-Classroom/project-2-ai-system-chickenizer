@@ -13,6 +13,8 @@ if str(_SRC) not in sys.path:
 from ql_strategy import QLearningStrategy  # noqa: E402
 from strategies import AlwaysSwerveStrategy, GameSimulator  # noqa: E402
 from train_ql import (  # noqa: E402
+    _epsilon_for_episode,
+    _episode_outcome_from_resilience,
     make_opponent_by_name,
     run_greedy_evaluation_episodes,
     train_ql_agent,
@@ -24,6 +26,54 @@ class TestMakeOpponentByName:
         assert make_opponent_by_name("p2", "tit_for_tat").player == "p2"
         assert make_opponent_by_name("p2", "minimax", minimax_depth=3).depth == 3
         assert make_opponent_by_name("p1", "defensive").player == "p1"
+
+
+class TestEpisodeOutcomeFromResilience:
+    def test_agent_p1_higher_wins(self):
+        fs = {"p1_resilience": 30, "p2_resilience": 10}
+        assert _episode_outcome_from_resilience(fs, True) == "win"
+        assert _episode_outcome_from_resilience(fs, False) == "loss"
+
+    def test_tie_on_equal_resilience(self):
+        fs = {"p1_resilience": 5, "p2_resilience": 5}
+        assert _episode_outcome_from_resilience(fs, True) == "tie"
+        assert _episode_outcome_from_resilience(fs, False) == "tie"
+
+    def test_resilience_diff_overrides_raw_when_present(self):
+        fs = {
+            "resilience_diff": -3,
+            "p1_resilience": 99,
+            "p2_resilience": 0,
+        }
+        assert _episode_outcome_from_resilience(fs, True) == "loss"
+        assert _episode_outcome_from_resilience(fs, False) == "win"
+
+
+class TestEpsilonSchedule:
+    def test_linear_endpoints(self):
+        assert _epsilon_for_episode(0, 100, 0.25, 0.05) == pytest.approx(0.25)
+        assert _epsilon_for_episode(99, 100, 0.25, 0.05) == pytest.approx(0.05)
+        mid = _epsilon_for_episode(40, 80, 0.25, 0.05)
+        assert mid == pytest.approx(0.25 + (0.05 - 0.25) * (40 / 79))
+
+    def test_single_episode_uses_start_not_end(self):
+        assert _epsilon_for_episode(0, 1, 0.25, 0.05) == pytest.approx(0.25)
+
+    def test_schedule_reflected_in_per_episode_rows(self):
+        agent = QLearningStrategy("p1", seed=0)
+        _, per_ep, _ = train_ql_agent(
+            agent,
+            "always_swerve",
+            episodes=80,
+            max_rounds=3,
+            epsilon_start=0.25,
+            epsilon_end=0.05,
+        )
+        assert per_ep[0]["epsilon"] == pytest.approx(0.25)
+        assert per_ep[-1]["epsilon"] == pytest.approx(0.05)
+        assert per_ep[40]["epsilon"] == pytest.approx(
+            0.25 + (0.05 - 0.25) * (40 / 79)
+        )
 
 
 class TestTrainQlAgent:
@@ -54,6 +104,32 @@ class TestTrainQlAgent:
         assert "TitForTat" in stats.opponent
 
 
+class TestExplorationMatchesEpsilonGreedy:
+    def test_constant_epsilon_explore_rate_near_epsilon(self):
+        """When start==end, each decide() explores independently with P=ε."""
+        agent = QLearningStrategy("p1", seed=2027)
+        sink: list = []
+        train_ql_agent(
+            agent,
+            "always_swerve",
+            episodes=60,
+            max_rounds=12,
+            epsilon_start=0.4,
+            epsilon_end=0.4,
+            training_round_trace_out=sink,
+            training_round_trace_max_engine_rounds=50_000,
+        )
+        flags = [
+            r["agent_explored"]
+            for r in sink
+            if isinstance(r.get("agent_explored"), bool)
+        ]
+        n = len(flags)
+        assert n > 200
+        rate = sum(flags) / n
+        assert 0.30 < rate < 0.50
+
+
 class TestRunGreedyEvaluationEpisodes:
     def test_no_learning_and_restores_flags(self):
         agent = QLearningStrategy("p1", seed=3)
@@ -75,7 +151,7 @@ class TestSimulateAbandonOnFailure:
         p2 = AlwaysSwerveStrategy("p2")
         p1._prev_s = (2, 2, 2)
         p1._prev_a = False
-        p1._res_before_action = 0
+        p1._margin_before_action = 0.0
 
         with patch.object(sim.engine, "run_game", side_effect=RuntimeError("boom")):
             with pytest.raises(RuntimeError, match="boom"):
@@ -83,4 +159,4 @@ class TestSimulateAbandonOnFailure:
 
         assert p1._prev_s is None
         assert p1._prev_a is None
-        assert p1._res_before_action is None
+        assert p1._margin_before_action is None

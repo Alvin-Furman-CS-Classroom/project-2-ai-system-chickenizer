@@ -11,8 +11,72 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from engine import GameEngine  # noqa: E402
-from ql_strategy import QLearningStrategy, encode_ql_state  # noqa: E402
+from ql_strategy import (  # noqa: E402
+    QLearningStrategy,
+    encode_ql_state,
+    terminal_margin_bonus,
+)
 from strategies import AlwaysSwerveStrategy, GameSimulator  # noqa: E402
+
+
+class TestTerminalMarginBonus:
+    def test_round_cap_tied_margin_no_terminal_bonus(self):
+        gs = {
+            "match_end_reason": "round_cap",
+            "p1_hp": 100,
+            "p2_hp": 100,
+            "resilience_diff": 0,
+        }
+        assert (
+            terminal_margin_bonus("p1", gs, terminal_win=50.0, terminal_loss=50.0) == 0.0
+        )
+
+    def test_round_cap_no_bonus_even_if_margin_ahead(self):
+        """Horn ending: no terminal spike; decisive endings use HP / tap only."""
+        gs = {
+            "match_end_reason": "round_cap",
+            "p1_hp": 100,
+            "p2_hp": 100,
+            "resilience_diff": 3,
+        }
+        assert (
+            terminal_margin_bonus("p1", gs, terminal_win=50.0, terminal_loss=50.0) == 0.0
+        )
+
+    def test_round_cap_overrides_stale_zero_hp_on_snapshot(self):
+        """Horn wins if ``match_end_reason`` says so (ignore inconsistent HP fields)."""
+        gs = {
+            "match_end_reason": "round_cap",
+            "p1_hp": 100,
+            "p2_hp": 0,
+            "resilience_diff": 20,
+        }
+        assert (
+            terminal_margin_bonus("p1", gs, terminal_win=50.0, terminal_loss=50.0) == 0.0
+        )
+
+    def test_hp_knockout_no_bonus_when_resilience_still_tied(self):
+        """Symmetric crashes keep diff 0; HP-only win must not inject +50."""
+        gs = {
+            "match_end_reason": "p2_hp_zero",
+            "p1_hp": 40,
+            "p2_hp": 0,
+            "resilience_diff": 0,
+        }
+        assert (
+            terminal_margin_bonus("p1", gs, terminal_win=50.0, terminal_loss=50.0) == 0.0
+        )
+
+    def test_hp_knockout_bonus_when_margin_separated(self):
+        gs = {
+            "match_end_reason": "p2_hp_zero",
+            "p1_hp": 40,
+            "p2_hp": 0,
+            "resilience_diff": 15,
+        }
+        assert terminal_margin_bonus(
+            "p1", gs, terminal_win=50.0, terminal_loss=50.0
+        ) == pytest.approx(50.0)
 
 
 class TestEncodeState:

@@ -1,9 +1,10 @@
 """Tabular Q-learning strategy for Chickenizer.
 
 State uses binned *own* resilience and last observable actions — not opponent
-resilience. Reward = change in own resilience between decisions (full rounds in
-effect for the acting player) plus terminal win/loss bonuses in
-``finalize_episode``. ``GameSimulator`` calls ``finalize_episode`` when present.
+resilience. Step reward = change in the agent's **resilience margin** (zero-sum:
+P1 uses ``resilience_diff`` = P1−P2; P2 uses its negative) between successive
+decisions, plus terminal win/loss bonuses in ``finalize_episode``.
+``GameSimulator`` calls ``finalize_episode`` when present.
 """
 
 from __future__ import annotations
@@ -78,8 +79,77 @@ def encode_ql_state(player: str, gamestate: Dict[str, Any]) -> StateKey:
     return (b, my_last, opp_last)
 
 
-def _own_resilience(player: str, gamestate: Dict[str, Any]) -> int:
-    return int(gamestate.get(f"{player}_resilience", 0))
+def agent_resilience_margin(player: str, gamestate: Dict[str, Any]) -> float:
+    """Signed margin for ``player``: P1−P2 resilience (same as engine ``resilience_diff`` for p1)."""
+    raw = gamestate.get("resilience_diff")
+    if raw is not None:
+        d = float(raw)
+    else:
+        d = float(
+            int(gamestate.get("p1_resilience", 0))
+            - int(gamestate.get("p2_resilience", 0))
+        )
+    return d if player == "p1" else -d
+
+
+def terminal_margin_bonus(
+    player: str,
+    gs: Dict[str, Any],
+    *,
+    terminal_win: float,
+    terminal_loss: float,
+) -> float:
+    """Sparse terminal shaping for ``finalize_episode`` and trace tooling.
+
+    Only **decisive** endings pay ``terminal_win`` / ``terminal_loss``: resilience
+    tap-out (|P1−P2| ≥ threshold), or an HP knockout **when resilience was not still
+    tied** (``resilience_diff != 0`` in engine coordinates).
+
+    When ``resilience_diff`` stayed **0** (e.g. symmetric ``CRASH`` rounds: same
+    crash penalty to both), an HP-only finish does **not** add ±50 — per-step margin
+    deltas were already zero, so a sparse “win” would not match the learned state signal.
+
+    When the match ends on the round horn (``match_end_reason == "round_cap"``), this
+    returns **0** regardless of HP/resilience fields on the snapshot.
+    """
+    try:
+        from .engine import GameEngine
+    except ImportError:
+        from engine import GameEngine  # type: ignore
+    th = GameEngine.RESILIENCE_THRESHOLD
+
+    if gs.get("match_end_reason") == "round_cap":
+        return 0.0
+
+    # P1−P2 in engine ``gamestate`` (same as ``resilience_diff``).
+    d = int(gs.get("resilience_diff", 0))
+
+    # HP knockouts: bonus only if margin had separated (otherwise attrition is invisible
+    # to the Q-state, which only sees own-bin + actions — not HP).
+    if player == "p1":
+        if gs.get("p2_hp", 1) <= 0:
+            return terminal_win if d != 0 else 0.0
+        if gs.get("p1_hp", 1) <= 0:
+            return -terminal_loss if d != 0 else 0.0
+    else:
+        if gs.get("p1_hp", 1) <= 0:
+            return terminal_win if d != 0 else 0.0
+        if gs.get("p2_hp", 1) <= 0:
+            return -terminal_loss if d != 0 else 0.0
+
+    if player == "p1":
+        if d >= th:
+            return terminal_win
+        if d <= -th:
+            return -terminal_loss
+    else:
+        if d <= -th:
+            return terminal_win
+        if d >= th:
+            return -terminal_loss
+
+    # Time limit only: no extra ±terminal (margin path already summed in TD steps).
+    return 0.0
 
 
 class QLearningStrategy(Strategy):
@@ -112,7 +182,9 @@ class QLearningStrategy(Strategy):
 
         self._prev_s: Optional[StateKey] = None
         self._prev_a: Optional[bool] = None
-        self._res_before_action: Optional[int] = None
+        self._margin_before_action: Optional[float] = None
+        # When set to a list, ``decide`` appends one dict per agent move (training traces).
+        self._episode_decision_trace: Optional[List[Dict[str, Any]]] = None
 
     def q_table_records(self) -> List[Dict[str, Any]]:
         """One row per visited state: columns are stable for ``st.dataframe`` / CSV / charts."""
@@ -163,42 +235,21 @@ class QLearningStrategy(Strategy):
     def reset_episode(self) -> None:
         self._prev_s = None
         self._prev_a = None
-        self._res_before_action = None
+        self._margin_before_action = None
+        if self._episode_decision_trace is not None:
+            self._episode_decision_trace.clear()
 
     def abandon_episode(self) -> None:
         """Clear TD bookkeeping without a learning update (e.g. simulation crashed)."""
         self.reset_episode()
 
-    def _engine_cls(self):
-        try:
-            from .engine import GameEngine
-        except ImportError:
-            from engine import GameEngine  # type: ignore
-        return GameEngine
-
     def _terminal_extra(self, gs: Dict[str, Any]) -> float:
-        th = self._engine_cls().RESILIENCE_THRESHOLD
-        if self.player == "p1":
-            if gs.get("p2_hp", 1) <= 0:
-                return self.terminal_win
-            if gs.get("p1_hp", 1) <= 0:
-                return -self.terminal_loss
-            d = gs.get("resilience_diff", 0)
-            if d >= th:
-                return self.terminal_win
-            if d <= -th:
-                return -self.terminal_loss
-        else:
-            if gs.get("p1_hp", 1) <= 0:
-                return self.terminal_win
-            if gs.get("p2_hp", 1) <= 0:
-                return -self.terminal_loss
-            d = gs.get("resilience_diff", 0)
-            if d <= -th:
-                return self.terminal_win
-            if d >= th:
-                return -self.terminal_loss
-        return 0.0
+        return terminal_margin_bonus(
+            self.player,
+            gs,
+            terminal_win=self.terminal_win,
+            terminal_loss=self.terminal_loss,
+        )
 
     def _update(
         self,
@@ -228,35 +279,45 @@ class QLearningStrategy(Strategy):
             self.reset_episode()
 
         s = encode_ql_state(self.player, gamestate)
-        res_now = _own_resilience(self.player, gamestate)
+        margin_now = agent_resilience_margin(self.player, gamestate)
 
         if (
             self._prev_s is not None
             and self._prev_a is not None
-            and self._res_before_action is not None
+            and self._margin_before_action is not None
         ):
-            r = float(res_now - self._res_before_action)
+            r = float(margin_now - self._margin_before_action)
             self._update(self._prev_s, self._prev_a, r, s, done=False)
 
-        if self.rng.random() < self.epsilon:
+        explored = self.rng.random() < self.epsilon
+        if explored:
             action = self.rng.choice([False, True])
         else:
             q = self.q[s]
             qf, qt = q[False], q[True]
             action = True if qt >= qf else False
 
+        if self._episode_decision_trace is not None:
+            self._episode_decision_trace.append(
+                {
+                    "completed_rounds_before": len(gamestate.get("score") or []),
+                    "explored": explored,
+                    "stay": action,
+                }
+            )
+
         self._prev_s = s
         self._prev_a = action
-        self._res_before_action = res_now
+        self._margin_before_action = margin_now
         return action
 
     def finalize_episode(self, final_gamestate: Dict[str, Any]) -> None:
         """Last transition when no further ``decide`` call happens for this agent."""
-        if self._prev_s is None or self._prev_a is None or self._res_before_action is None:
+        if self._prev_s is None or self._prev_a is None or self._margin_before_action is None:
             return
 
-        res_end = _own_resilience(self.player, final_gamestate)
-        shaping = float(res_end - self._res_before_action)
+        margin_end = agent_resilience_margin(self.player, final_gamestate)
+        shaping = float(margin_end - self._margin_before_action)
         extra = self._terminal_extra(final_gamestate)
         r = shaping + extra
         s_next = encode_ql_state(self.player, final_gamestate)
@@ -264,4 +325,4 @@ class QLearningStrategy(Strategy):
 
         self._prev_s = None
         self._prev_a = None
-        self._res_before_action = None
+        self._margin_before_action = None

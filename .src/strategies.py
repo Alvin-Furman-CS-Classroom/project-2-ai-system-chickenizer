@@ -34,9 +34,10 @@ def _load_engine_class():
     except ImportError:
         engine_path = Path(__file__).resolve().with_name("engine.py")
         spec = importlib.util.spec_from_file_location("engine_for_strategies", engine_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load GameEngine from {engine_path}") from None
         module = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        spec.loader.exec_module(module)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)
         return module.GameEngine
 
 
@@ -404,9 +405,12 @@ class GameSimulator:
             raise ValueError(f"p2_strategy must have player='p2', got '{p2_strategy.player}'")
         
         # Prepare initial gamestate with per-player preferences merged from strategies.
+        # Use a fresh default template, not ``engine.get_gamestate()`` — the engine may
+        # still hold end-of-match HP (e.g. 0) from a previous ``simulate`` on this instance.
         if initial_gamestate is None:
+            GameEngine = _load_engine_class()
             base_gamestate = merge_strategy_preferences(
-                self.engine.get_gamestate(), p1_strategy, p2_strategy
+                deepcopy(GameEngine.DEFAULT_GAMESTATE), p1_strategy, p2_strategy
             )
         else:
             base_gamestate = merge_strategy_preferences(

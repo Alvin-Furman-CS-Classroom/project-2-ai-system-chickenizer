@@ -62,6 +62,8 @@ class GameEngine:
             "crash": -15,
             "hp_delta": 0,  # default: P2 does not care about HP unless overridden
         },
+        # Set by ``run_game`` when the loop ends: ``round_cap`` or ``is_game_over`` reason.
+        "match_end_reason": "",
     }
 
     def __init__(self, gamestate: Optional[Dict[str, Any]] = None):
@@ -295,11 +297,22 @@ class GameEngine:
         self.gamestate["p1_resilience"] = 0
         self.gamestate["p2_resilience"] = 0
         self.gamestate["resilience_diff"] = 0
+        self.gamestate["match_end_reason"] = ""
+
+        # New match: revive HP if a prior game left anyone at/below zero (same engine).
+        if self.gamestate["p1_hp"] <= 0 or self.gamestate["p2_hp"] <= 0:
+            self.gamestate["p1_hp"] = self.DEFAULT_HP
+            self.gamestate["p2_hp"] = self.DEFAULT_HP
+
+        # ``__init__`` captured a snapshot before these resets; align history with the
+        # actual match start (see GameSimulator using prior ``get_gamestate()`` as base).
+        self.gamestate_history = [deepcopy(self.gamestate)]
 
         while self.gamestate["round"] < max_rounds:
             # Check for game over conditions
-            is_over, _ = self.is_game_over()
+            is_over, reason = self.is_game_over()
             if is_over:
+                self.gamestate["match_end_reason"] = reason or "game_over"
                 break
 
             # Generate initial gamestate for this round (before any actions)
@@ -318,6 +331,13 @@ class GameEngine:
 
             # Generate final gamestate for this round (applies crash damage, increments round)
             self.generate_gamestate(increment_round=True)
+        else:
+            # Exhausted ``max_rounds`` without breaking (no mid-match ``is_game_over``).
+            self.gamestate["match_end_reason"] = "round_cap"
+
+        # Last history row was appended before ``match_end_reason`` was set; align it.
+        if self.gamestate_history:
+            self.gamestate_history[-1] = deepcopy(self.gamestate)
 
         return self.gamestate_history
 

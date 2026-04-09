@@ -414,6 +414,7 @@ class TestGameEngineGameLoop:
         assert final_state["round"] == 2
         assert final_state["p1_stay"] == False
         assert final_state["p2_stay"] == False
+        assert final_state["match_end_reason"] == "round_cap"
     
     def test_run_game_action_histories(self):
         """Test that action histories are tracked during run_game()."""

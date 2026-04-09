@@ -26,6 +26,7 @@ class TestTrainAndTestVsOpponent:
             epsilon_end=0.1,
         )
         assert res.opponent_key == "always_swerve"
+        assert res.rl_seat == "p1"
         assert res.train.episodes == 3
         assert res.test.episodes == 2
         assert res.train.wins + res.train.losses + res.train.ties == 3
@@ -43,7 +44,7 @@ class TestTrainAndTestVsOpponent:
 
 
 class TestRunFullTournament:
-    def test_subset_opponents(self):
+    def test_subset_opponents_both_seats(self):
         subset = ("always_swerve", "always_stay")
         rows = qt.run_full_tournament(
             opponents=subset,
@@ -54,13 +55,32 @@ class TestRunFullTournament:
             epsilon_start=0.15,
             epsilon_end=0.15,
         )
-        assert len(rows) == 2
-        assert [r.opponent_key for r in rows] == ["always_swerve", "always_stay"]
+        assert len(rows) == 4
+        assert [(r.opponent_key, r.rl_seat) for r in rows] == [
+            ("always_swerve", "p1"),
+            ("always_swerve", "p2"),
+            ("always_stay", "p1"),
+            ("always_stay", "p2"),
+        ]
         for r in rows:
             assert r.train.episodes == 2
             assert r.test.episodes == 1
 
-    def test_default_covers_all_builtin_names(self):
+    def test_rl_seat_p1_only_halves_rows(self):
+        rows = qt.run_full_tournament(
+            opponents=("always_swerve",),
+            rl_seat="p1",
+            train_episodes=1,
+            test_episodes=1,
+            max_rounds=3,
+            agent_seed=0,
+            epsilon_start=0.0,
+            epsilon_end=0.0,
+        )
+        assert len(rows) == 1
+        assert rows[0].rl_seat == "p1"
+
+    def test_default_covers_all_builtin_names_and_both_seats(self):
         rows = qt.run_full_tournament(
             train_episodes=1,
             test_episodes=1,
@@ -69,14 +89,18 @@ class TestRunFullTournament:
             epsilon_start=0.0,
             epsilon_end=0.0,
         )
-        assert len(rows) == len(OPPONENT_CHOICES)
+        assert len(rows) == 2 * len(OPPONENT_CHOICES)
         assert {r.opponent_key for r in rows} == set(OPPONENT_CHOICES)
+        for key in OPPONENT_CHOICES:
+            seats = {r.rl_seat for r in rows if r.opponent_key == key}
+            assert seats == {"p1", "p2"}
 
 
 class TestFormatTournamentReport:
     def test_contains_opponent_keys(self):
         rows = qt.run_full_tournament(
             opponents=("always_stay",),
+            rl_seat="p1",
             train_episodes=1,
             test_episodes=1,
             max_rounds=3,
@@ -85,6 +109,9 @@ class TestFormatTournamentReport:
             epsilon_end=0.0,
         )
         text = qt.format_tournament_report(rows)
+        assert rows[0].rl_seat == "p1"
         assert "always_stay" in text
-        assert "train W/L/T" in text
+        assert "tr R W/L/T" in text
+        assert "margin" in text
         assert "opponent_class" in text
+        assert "seat" in text
