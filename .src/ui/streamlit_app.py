@@ -352,7 +352,7 @@ def _render_arena(
       .arena {{
         position: relative;
         width: 100%;
-        height: 180px;
+        height: 240px;
         border-radius: 10px;
         overflow: hidden;
         border: 1px solid #444;
@@ -362,7 +362,7 @@ def _render_arena(
       .car {{
         position: absolute;
         top: 64px;
-        font-size: 40px;
+        font-size: 64px;
       }}
       .p1 {{ left: 8%; transform: translate(0px, 0px) scaleX(-1); }}
       .p2 {{ right: 8%; transform: translate(0px, 0px); }}
@@ -460,7 +460,7 @@ def _render_arena(
       }})();
     </script>
     """
-    components.html(arena_html, height=220)
+    components.html(arena_html, height=260)
 
 
 def _close_ui() -> None:
