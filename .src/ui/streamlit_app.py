@@ -446,6 +446,10 @@ def main() -> None:
         p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
 
         animate_arena = st.checkbox("Enable arena animation", value=True, key="animate_arena")
+        # Defaults so main-body ``_render_arena`` always sees bound names (pyright).
+        animation_speed = 700
+        return_hold_ms = 1200
+        return_speed_ms = 350
         if animate_arena:
             animation_speed = int(
                 st.slider("Animation speed (ms)", min_value=200, max_value=1500, value=700, step=50, key="arena_anim_ms")
