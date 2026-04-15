@@ -8,7 +8,7 @@
 
 ## Summary
 
-Module 5 is functionally complete for end-of-project delivery: it provides normal-form and repeated-play analysis outputs and integrates those into the Streamlit UI. The module is technically strong, but rubric risk remains around integration-test evidence because `integration_tests/` currently has no runnable tests.
+Module 5 is functionally complete for end-of-project delivery: it provides normal-form and repeated-play analysis outputs and integrates those into the Streamlit UI. The module is technically strong, and integration-test evidence is now present with multiple runnable cross-module flows under `integration_tests/`.
 
 ---
 
@@ -91,51 +91,60 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 
 ### 2.1 Test Coverage and Design (6 points)
 
-| Score | 5/6 |
+| Score | 6/6 |
 |-------|-----|
 
 **Evidence Collected:**
-- `python -m pytest unit_tests -q` -> **185 passed in 1.86s**
-- `python -m pytest integration_tests -q` -> **no tests ran**
+- `python -m pytest unit_tests -q` -> **185 passed**
+- `python -m pytest integration_tests -q` -> **8 passed**
 
 **Strengths:**
 - Extensive unit coverage for module-5 analysis behavior and edge cases.
 - Tests validate both computation and reporting-format outputs.
+- Runnable integration tests now exist and cover multiple cross-module pipelines:
+  - `integration_tests/module5/test_integration_flow_a.py` (Module 1 -> simulation -> Module 5 repeated-play analysis)
+  - `integration_tests/module5/test_integration_ifb_nash_report.py` (simulation -> hypothesis vs final Nash report)
+  - `integration_tests/module2/test_module2_with_module5_repeated_analysis.py` (Module 2 minimax -> Module 5 repeated-play analysis)
+  - `integration_tests/module3/test_module3_to_module5_one_round_consistency.py` (Module 3 normal form -> realized engine outcome consistency)
+  - `integration_tests/module4/test_module4_to_module5_early_termination.py` (early termination -> Module 5 invariants)
+  - `integration_tests/rl/test_rl_smoke.py` (RL training/tournament smoke)
 
 **Gap:**
-- Integration test suite for cross-module flows is missing executable tests at this final stage.
+- Integration tests are intentionally lightweight and prioritize stable contracts over exhaustive end-to-end UI rendering.
 
 ---
 
 ### 2.2 Test Quality and Correctness (5 points)
 
-| Score | 4/5 |
+| Score | 5/5 |
 |-------|-----|
 
 **Strengths:**
 - Assertions are behavior-oriented (equilibria sets, matrix invariants, conditional aggregates).
 - Coverage includes divergence and stability scenarios, not only happy path.
+- Integration assertions are non-brittle (shape/invariants) while still validating real module handoffs.
 
 **Gap:**
-- End-to-end module handoff verification is underrepresented without integration tests.
+- None material for rubric purposes (integration handoffs are demonstrated and runnable).
 
 ---
 
 ### 2.3 Test Documentation and Organization (4 points)
 
-| Score | 3/4 |
+| Score | 4/4 |
 |-------|-----|
 
 **Strengths:**
 - Tests are grouped by behavior and feature area.
 - Test docstrings communicate expected semantics and rationale.
+- Integration tests are organized per module area (`module2/`, `module3/`, `module4/`, `module5/`, `rl/`), making the evidence easy to navigate.
 
 **Gap:**
 - Path/bootstrap setup remains repetitive due to package layout mismatch.
 
 ---
 
-### Part 2 Subtotal: 12/15
+### Part 2 Subtotal: 15/15
 
 ---
 
@@ -178,9 +187,9 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 | Section | Score | Max | Percentage |
 |---------|-------|-----|------------|
 | Part 1: Source Code | 25 | 27 | 93% |
-| Part 2: Testing | 12 | 15 | 80% |
+| Part 2: Testing | 15 | 15 | 100% |
 | Part 3: GitHub | 5 | 8 | 63% |
-| **Total** | **42** | **50** | **84%** |
+| **Total** | **45** | **50** | **90%** |
 
 ---
 
@@ -188,7 +197,7 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 
 ### Must Fix Before Final Submission
 
-- [ ] Add at least one real integration test flow in `integration_tests/` that exercises module handoff (e.g., strategy -> normal-form analysis -> repeated-play summary).
+- [x] Add real integration test flows in `integration_tests/` that exercise module handoff (multiple cross-module tests added and runnable).
 
 ### Should Fix
 
