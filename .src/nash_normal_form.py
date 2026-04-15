@@ -1,9 +1,12 @@
 """One-shot normal-form Nash analysis for Chickenizer.
 
 For each pair of actions (swerve/stay × swerve/stay), simulates one counterfactual
-round via ``GameEngine`` and records resilience payoffs. Utilities come from
-``merge_strategy_preferences``; ``Strategy`` objects supply ``implied_preferences``
-and names — Nash is defined on this induced matrix, not on full dynamic play.
+round via ``GameEngine`` and records resilience payoffs. Utilities come from ``merge_strategy_preferences`` (engine defaults + each strategy’s
+``implied_preferences``). In the UI, **cares** sliders are merged **on top** by key so
+user weights override; those ``p1_preferences`` / ``p2_preferences`` drive resilience
+in each counterfactual round. One-shot cells use **current** resilience in ``state`` as
+the baseline (not reset to zero), so entries are **post-round cumulative** resilience.
+Nash is defined on this induced matrix, not on full dynamic play.
 
 Pure Nash: best-response enumeration. Mixed Nash: ``nashpy`` (lazy-imported).
 """
@@ -26,6 +29,14 @@ ACTION_LABELS: Tuple[str, str] = ("Swerve", "Stay")
 
 
 def _reset_for_one_shot(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Isolate one counterfactual round without wiping resilience.
+
+    We clear round/history/score so the hypothetical is a single joint move, but we
+    **keep** ``p1_resilience`` and ``p2_resilience`` from ``state``. Each matrix cell
+    is then **final resilience after that counterfactual round** from the current
+    baseline (so values move with the match and coloring stays meaningful). Pure
+    Nash indices are unchanged vs a zero baseline (payoffs are an additive shift).
+    """
     s = deepcopy(state)
     s["p1_stay"] = False
     s["p2_stay"] = False
@@ -33,9 +44,11 @@ def _reset_for_one_shot(state: Dict[str, Any]) -> Dict[str, Any]:
     s["p1_action_history"] = []
     s["p2_action_history"] = []
     s["score"] = []
-    s["p1_resilience"] = 0
-    s["p2_resilience"] = 0
-    s["resilience_diff"] = 0
+    p1r = int(s.get("p1_resilience", 0))
+    p2r = int(s.get("p2_resilience", 0))
+    s["p1_resilience"] = p1r
+    s["p2_resilience"] = p2r
+    s["resilience_diff"] = p1r - p2r
     return s
 
 
@@ -82,6 +95,95 @@ def build_payoff_matrices(
         payoff_p2.append(row_p2)
 
     return payoff_p1, payoff_p2
+
+
+def build_payoff_matrices_at_merged_state(
+    merged_gamestate: Dict[str, Any],
+) -> Tuple[List[List[int]], List[List[int]]]:
+    """Build 2×2 resilience payoffs from an **already merged** gamestate.
+
+    Use this when preferences already include ``merge_strategy_preferences`` and
+    user ``p1_preferences`` / ``p2_preferences`` — calling ``build_payoff_matrices``
+    again would double-apply implied strategy preferences.
+    """
+    base = deepcopy(merged_gamestate)
+    payoff_p1: List[List[int]] = []
+    payoff_p2: List[List[int]] = []
+    for a1 in ACTION_ORDER:
+        row_p1: List[int] = []
+        row_p2: List[int] = []
+        for a2 in ACTION_ORDER:
+            u1, u2 = _one_shot_payoffs(base, a1, a2)
+            row_p1.append(u1)
+            row_p2.append(u2)
+        payoff_p1.append(row_p1)
+        payoff_p2.append(row_p2)
+    return payoff_p1, payoff_p2
+
+
+@dataclass
+class RoundNormalFormSnapshot:
+    """One-shot 2×2 normal form evaluated at the **start** of a round."""
+
+    round_index: int
+    payoff_p1: List[List[int]]
+    payoff_p2: List[List[int]]
+    pure_nash_indices: List[Tuple[int, int]]
+    baseline_p1_resilience: int = 0
+    baseline_p2_resilience: int = 0
+
+
+def collect_per_round_normal_forms(
+    p1_strategy: Strategy,
+    p2_strategy: Strategy,
+    merged_initial: Dict[str, Any],
+    max_rounds: int,
+) -> List[RoundNormalFormSnapshot]:
+    """For each round (until cap or game over), capture the induced 2×2 matrix at round **start**.
+
+    The match advances with the same turn order as ``GameEngine.run_game``: P1 acts,
+    then P2, then the round resolves. Before any action in round *k*, we snapshot
+    ``build_payoff_matrices_at_merged_state`` so HP / state carry across rounds.
+    """
+    if p1_strategy.player != "p1":
+        raise ValueError(f"p1_strategy must have player='p1', got {p1_strategy.player!r}")
+    if p2_strategy.player != "p2":
+        raise ValueError(f"p2_strategy must have player='p2', got {p2_strategy.player!r}")
+
+    engine = GameEngine(gamestate=deepcopy(merged_initial))
+    out: List[RoundNormalFormSnapshot] = []
+    cap = max(1, int(max_rounds))
+
+    for k in range(1, cap + 1):
+        is_over, _reason = engine.is_game_over()
+        if is_over:
+            break
+
+        gs = engine.get_gamestate()
+        br1 = int(gs.get("p1_resilience", 0))
+        br2 = int(gs.get("p2_resilience", 0))
+        p1_m, p2_m = build_payoff_matrices_at_merged_state(gs)
+        pure = find_pure_nash(p1_m, p2_m)
+        out.append(
+            RoundNormalFormSnapshot(
+                round_index=k,
+                payoff_p1=p1_m,
+                payoff_p2=p2_m,
+                pure_nash_indices=pure,
+                baseline_p1_resilience=br1,
+                baseline_p2_resilience=br2,
+            )
+        )
+
+        current = engine.generate_gamestate(increment_round=False)
+        p1_action = p1_strategy(current)
+        engine.play_action("p1", p1_action)
+        current = engine.generate_gamestate(increment_round=False)
+        p2_action = p2_strategy(current)
+        engine.play_action("p2", p2_action)
+        engine.generate_gamestate(increment_round=True)
+
+    return out
 
 
 def best_response_correspondences(
