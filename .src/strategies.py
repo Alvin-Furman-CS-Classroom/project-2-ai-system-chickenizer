@@ -182,6 +182,22 @@ class TitForTatStrategy(Strategy):
         return last_action == "stay"
 
 
+class FollowerStrategy(Strategy):
+    """Swerve until the opponent has ever played **stay**; then always stay.
+
+    Reads ``{opponent}_action_history`` (same strings the engine records). For **P2**,
+    that includes the opponent's move in the **current** round before P2 acts, so a
+    P1 ``stay`` on round zero immediately flips this player to ``stay``. No engine or
+    preference changes—purely a reactive commitment rule (deliberately exploitable).
+    """
+
+    def decide(self, gamestate: Dict[str, Any]) -> bool:
+        hist = gamestate.get(f"{self.opponent}_action_history") or []
+        if any(a == "stay" for a in hist):
+            return True
+        return False
+
+
 class RandomStrategy(Strategy):
     """Strategy that randomly chooses to stay or swerve.
     

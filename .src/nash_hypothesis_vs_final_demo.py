@@ -25,15 +25,16 @@ One case (1-based index), mixed NE lines + use the second mixed equilibrium for 
 
     python .src/nash_hypothesis_vs_final_demo.py --case 3 --mixed --mixed-index 1
 
-**Testing (CI smoke):** tabular Q vs entertainer opponent (short training + greedy sim)::
+**Testing (CI smoke):** short ``train_ql_agent`` runs + greedy replay::
 
     pytest -q unit_tests/test_ql_strategy.py::TestQLearningSmoke::test_train_ql_vs_entertainer_smoke
+    pytest -q unit_tests/test_ql_strategy.py::TestQLearningSmoke::test_train_ql_vs_follower_smoke
 
 Strategies span simple constants → reactive / search / HP-aware → tabular RL.
-RL cases (11–14) **train** the Q-agent against the listed opponent before the ASCII
-match, then set ``epsilon=0`` so the recap uses a **greedy** replay. Cases 11–13 seat the
-learner as **P1**; case **14** seats the learner as **P2** (``agent_plays_p1=False`` in
-``train_ql_agent``).
+Cases **11–13** and **16** **train** a P1 Q-learner vs the named opponent, then **greedy**
+replay for the printed match. Cases **14** and **17** train **P2** (vs TFT and vs follower
+on P1). Case **15** is **not** RL: **Follower** vs **AlwaysStay** (commitment dynamics
+without training).
 ``--mixed`` adds mixed NE lines to the two grids and fills ``mixed_equilibria`` so the
 joint table can use a **mixed** reference; without it, the joint table uses a **uniform
 mixture over pure Nash** cells (see ``hypothesis_joint_distribution``).
@@ -58,6 +59,7 @@ from strategies import (  # noqa: E402
     AlwaysSwerveStrategy,
     DefensiveStrategy,
     EntertainerStrategy,
+    FollowerStrategy,
     HPThresholdStrategy,
     MinimaxStrategy,
     RandomStrategy,
@@ -174,6 +176,18 @@ def _tft_vs_ql_p2() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]:
     return (TitForTatStrategy("p1"), p2, None)
 
 
+def _ql_vs_follower() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]:
+    """P1 Q-learner trained vs ``follower``; greedy replay vs ``FollowerStrategy`` on P2."""
+    p1 = _train_p1_ql_for_demo(47, "follower")
+    return (p1, FollowerStrategy("p2"), None)
+
+
+def _follower_vs_ql_p2() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]:
+    """P1 ``FollowerStrategy``; P2 Q-learner trained *as P2* vs follower on P1, greedy replay."""
+    p2 = _train_p2_ql_for_demo(53, "follower")
+    return (FollowerStrategy("p1"), p2, None)
+
+
 # (title, factory, max_rounds)
 CASES: List[Tuple[str, StrategyPairFactory, int]] = [
     (
@@ -262,6 +276,24 @@ CASES: List[Tuple[str, StrategyPairFactory, int]] = [
     (
         "14) RL — TitForTat (P1) vs QLearningStrategy (P2; trained as P2 vs TFT, greedy)",
         _tft_vs_ql_p2,
+        14,
+    ),
+    (
+        "15) Medium — Follower (P1) vs AlwaysStay (P2): swerve until P2 ever stays, "
+        "then P1 locks to stay (crash-heavy)",
+        lambda: (FollowerStrategy("p1"), AlwaysStayStrategy("p2"), None),
+        12,
+    ),
+    (
+        "16) RL — QLearningStrategy (trained vs follower, greedy display) vs "
+        "FollowerStrategy (P2)",
+        _ql_vs_follower,
+        14,
+    ),
+    (
+        "17) RL — FollowerStrategy (P1) vs QLearningStrategy (P2; trained as P2 vs "
+        "follower on P1, greedy)",
+        _follower_vs_ql_p2,
         14,
     ),
 ]

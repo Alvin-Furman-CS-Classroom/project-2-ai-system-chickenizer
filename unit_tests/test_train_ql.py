@@ -34,6 +34,13 @@ class TestMakeOpponentByName:
         assert isinstance(e, EntertainerStrategy)
         assert e.player == "p2"
 
+    def test_follower_name(self):
+        from strategies import FollowerStrategy  # noqa: PLC0415
+
+        f = make_opponent_by_name("p1", "follower")
+        assert isinstance(f, FollowerStrategy)
+        assert f.player == "p1"
+
 
 class TestEpisodeOutcomeFromResilience:
     def test_agent_p1_higher_wins(self):
@@ -100,6 +107,20 @@ class TestTrainQlAgent:
         assert len(agent.q) > 0
         assert "resilience_leader" in rows[0]
         assert "resilience_margin_p1_minus_p2" in rows[0]
+
+    def test_short_run_vs_follower(self):
+        agent = QLearningStrategy("p1", seed=3)
+        _, _, stats = train_ql_agent(
+            agent,
+            "follower",
+            episodes=6,
+            max_rounds=8,
+            epsilon_start=0.3,
+            epsilon_end=0.1,
+        )
+        assert stats.episodes == 6
+        assert stats.opponent == "FollowerStrategy"
+        assert len(agent.q) > 0
 
     def test_short_run_vs_tit_for_tat(self):
         agent = QLearningStrategy("p1", seed=7)

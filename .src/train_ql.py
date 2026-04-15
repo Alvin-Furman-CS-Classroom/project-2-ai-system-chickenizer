@@ -27,6 +27,7 @@ from strategies import (  # noqa: E402
     AlwaysSwerveStrategy,
     DefensiveStrategy,
     EntertainerStrategy,
+    FollowerStrategy,
     GameSimulator,
     HPThresholdStrategy,
     MinimaxStrategy,
@@ -50,6 +51,7 @@ OPPONENT_CHOICES = (
     "aggressive",
     "defensive",
     "entertainer",
+    "follower",
 )
 
 
@@ -86,6 +88,8 @@ def make_opponent_by_name(
         return DefensiveStrategy(player)
     if name in ("entertainer", "entertain", "spectacle"):
         return EntertainerStrategy(player, seed=random_seed)
+    if name in ("follower", "follow"):
+        return FollowerStrategy(player)
     raise ValueError(f"Unknown opponent name: {name!r}; try one of {OPPONENT_CHOICES}")
 
 

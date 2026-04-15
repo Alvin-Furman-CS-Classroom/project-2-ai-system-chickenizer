@@ -27,6 +27,7 @@ engine_spec.loader.exec_module(engine_module)  # type: ignore
 AlwaysStayStrategy = strategies_module.AlwaysStayStrategy
 AlwaysSwerveStrategy = strategies_module.AlwaysSwerveStrategy
 TitForTatStrategy = strategies_module.TitForTatStrategy
+FollowerStrategy = strategies_module.FollowerStrategy
 RandomStrategy = strategies_module.RandomStrategy
 HPThresholdStrategy = strategies_module.HPThresholdStrategy
 AggressiveStrategy = strategies_module.AggressiveStrategy
@@ -136,6 +137,34 @@ class TestStatefulStrategiesBehavior:
         # Now p1 is critically low, p2 is only a bit above threshold
         assert aggressive(gs_low) is False
         assert defensive(gs_low) is False
+
+
+class TestFollowerStrategy:
+    def test_p1_swerves_until_opponent_has_stayed_then_stays(self):
+        sim = GameSimulator()
+        p1 = FollowerStrategy("p1")
+        p2 = AlwaysStayStrategy("p2")
+        r = sim.simulate(p1, p2, max_rounds=4)
+        h1 = r["final_state"]["p1_action_history"]
+        assert h1[0] == "swerve"
+        assert all(a == "stay" for a in h1[1:])
+
+    def test_p1_never_sees_stay_vs_always_swerve_all_swerves(self):
+        sim = GameSimulator()
+        p1 = FollowerStrategy("p1")
+        p2 = AlwaysSwerveStrategy("p2")
+        r = sim.simulate(p1, p2, max_rounds=5)
+        assert r["final_state"]["p1_action_history"] == ["swerve"] * 5
+        assert r["final_state"]["p2_action_history"] == ["swerve"] * 5
+
+    def test_p2_follower_locks_same_round_if_p1_stays_first(self):
+        sim = GameSimulator()
+        p1 = AlwaysStayStrategy("p1")
+        p2 = FollowerStrategy("p2")
+        r = sim.simulate(p1, p2, max_rounds=2)
+        h2 = r["final_state"]["p2_action_history"]
+        assert h2[0] == "stay"
+        assert h2[1] == "stay"
 
 
 class TestEntertainerStrategy:

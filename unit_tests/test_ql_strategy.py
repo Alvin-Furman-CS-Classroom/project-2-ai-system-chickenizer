@@ -19,6 +19,7 @@ from ql_strategy import (  # noqa: E402
 from strategies import (  # noqa: E402
     AlwaysSwerveStrategy,
     EntertainerStrategy,
+    FollowerStrategy,
     GameSimulator,
 )
 from train_ql import train_ql_agent  # noqa: E402
@@ -109,6 +110,24 @@ class TestQLearningSmoke:
         r = sim.simulate(p1, p2, max_rounds=5)
         assert r["summary"]["rounds_played"] == 5
         assert len(p1.q) > 0
+
+    def test_train_ql_vs_follower_smoke(self):
+        agent = QLearningStrategy("p1", seed=202, epsilon=0.2)
+        _, rows, stats = train_ql_agent(
+            agent,
+            "follower",
+            episodes=8,
+            max_rounds=8,
+            epsilon_start=0.35,
+            epsilon_end=0.12,
+        )
+        assert len(rows) == 8
+        assert stats.opponent == "FollowerStrategy"
+        assert len(agent.q) > 0
+        sim = GameSimulator()
+        agent.epsilon = 0.0
+        r2 = sim.simulate(agent, FollowerStrategy("p2"), max_rounds=8)
+        assert r2["summary"]["rounds_played"] >= 1
 
     def test_train_ql_vs_entertainer_smoke(self):
         """Short ``train_ql_agent`` run vs spectacle opponent (reputation prefs); no crashes."""
