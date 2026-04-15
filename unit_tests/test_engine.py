@@ -48,6 +48,8 @@ class TestGameEngineInitialization:
         assert gamestate["round"] == 0
         assert gamestate["p1_action_history"] == []
         assert gamestate["p2_action_history"] == []
+        assert gamestate.get("p1_reputation", 0) == 0
+        assert gamestate.get("p2_reputation", 0) == 0
     
     def test_initialization_custom_gamestate(self):
         """Test initialization with custom gamestate."""
@@ -194,6 +196,20 @@ class TestGameEngineActions:
         assert engine.get_gamestate()["p1_stay"] == True
         assert gamestate["p1_action_history"] == ["stay"]
         assert engine.get_gamestate()["p1_action_history"] == ["stay"]
+        # Default preferences do not care about reputation — counter stays at 0.
+        assert gamestate["p1_reputation"] == 0
+
+    def test_play_action_p1_stay_increments_reputation_only_when_caring(self):
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        state["p1_preferences"] = {
+            **dict(state["p1_preferences"]),
+            "reputation_delta": 1,
+        }
+        engine = GameEngine(state)
+        gs = engine.play_action("p1", True)
+        assert gs["p1_reputation"] == 1
     
     def test_play_action_p1_swerve(self):
         """Test playing swerve action for p1."""
@@ -202,6 +218,7 @@ class TestGameEngineActions:
         
         assert gamestate["p1_stay"] == False
         assert gamestate["p1_action_history"] == ["swerve"]
+        assert gamestate["p1_reputation"] == 0
     
     def test_play_action_p2(self):
         """Test playing action for p2."""
@@ -210,6 +227,7 @@ class TestGameEngineActions:
         
         assert gamestate["p2_stay"] == True
         assert gamestate["p2_action_history"] == ["stay"]
+        assert gamestate["p2_reputation"] == 0
     
     def test_play_action_history_accumulation(self):
         """Test that action history accumulates multiple actions."""
@@ -560,6 +578,141 @@ class TestGameEngineLegacyMethods:
         
         # Original should be unchanged
         assert engine.get_gamestate()["p2_hp"] == 100
+
+
+class TestGameEngineReputation:
+    """Reputation (spectacle) counters and optional resilience linkage."""
+
+    def test_reputation_delta_adds_to_resilience_on_stay(self):
+        """Stay with ``reputation_delta`` care increments rep and applies resilience weight."""
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        z = {"round_win": 0, "round_loss": 0, "tie": 0, "crash": 0, "hp_delta": 0, "reputation_delta": 0}
+        state["p1_preferences"] = {**z, "reputation_delta": 10}
+        state["p2_preferences"] = {**z}
+        eng = GameEngine(state)
+        eng.play_action("p1", True)
+        eng.play_action("p2", False)
+        eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 1
+        assert gs["p2_reputation"] == 0
+        assert gs["p1_resilience"] == 10
+
+    def test_run_game_resets_reputation(self):
+        """``run_game`` clears reputation at match start like resilience."""
+        from copy import deepcopy
+
+        def p1_stay(gs):
+            return True
+
+        def p2_swerve(gs):
+            return False
+
+        initial = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        initial["p1_preferences"] = {
+            **dict(initial["p1_preferences"]),
+            "reputation_delta": 1,
+        }
+        eng = GameEngine()
+        eng.run_game(
+            max_rounds=2,
+            p1_strategy=p1_stay,
+            p2_strategy=p2_swerve,
+            initial_gamestate=initial,
+        )
+        assert eng.get_gamestate()["p1_reputation"] == 2
+
+        def both_swerve(gs):
+            return False
+
+        hist = eng.run_game(max_rounds=1, p1_strategy=both_swerve, p2_strategy=both_swerve)
+        assert hist[0]["p1_reputation"] == 0
+        assert hist[0]["p2_reputation"] == 0
+
+    def test_only_player_with_nonzero_reputation_delta_gets_counter_on_stay(self):
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        state["p2_preferences"] = {
+            **dict(state["p2_preferences"]),
+            "reputation_delta": 7,
+        }
+        eng = GameEngine(state)
+        eng.play_action("p1", True)
+        eng.play_action("p2", True)
+        eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 0
+        assert gs["p2_reputation"] == 1
+
+    def test_both_stay_crash_only_caring_players_reputation_increments(self):
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        z = {"round_win": 0, "round_loss": 0, "tie": 0, "crash": 0, "hp_delta": 0, "reputation_delta": 0}
+        state["p1_preferences"] = {**z, "reputation_delta": 1}
+        state["p2_preferences"] = {**z}
+        eng = GameEngine(state)
+        eng.play_action("p1", True)
+        eng.play_action("p2", True)
+        eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 1
+        assert gs["p2_reputation"] == 0
+
+    def test_negative_reputation_delta_reduces_resilience_but_still_increments_counter(
+        self,
+    ):
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        z = {"round_win": 0, "round_loss": 0, "tie": 0, "crash": 0, "hp_delta": 0, "reputation_delta": 0}
+        state["p1_preferences"] = {**z, "reputation_delta": -4}
+        state["p2_preferences"] = {**z}
+        eng = GameEngine(state)
+        eng.play_action("p1", True)
+        eng.play_action("p2", False)
+        eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 1
+        assert gs["p1_resilience"] == -4
+
+    def test_default_prefs_round_win_exactly_10_no_reputation_on_stay_win(self):
+        """No ``reputation_delta`` care → no rep counter; resilience = round_win only."""
+        eng = GameEngine()
+        eng.play_action("p1", True)
+        eng.play_action("p2", False)
+        eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 0
+        assert gs["p2_reputation"] == 0
+        assert gs["p1_resilience"] == 10
+        assert gs["p2_resilience"] == -10
+
+    def test_reputation_counter_equals_stays_per_player_when_caring(self):
+        from copy import deepcopy
+
+        state = deepcopy(GameEngine.DEFAULT_GAMESTATE)
+        state["p1_preferences"] = {
+            **dict(state["p1_preferences"]),
+            "reputation_delta": 1,
+        }
+        state["p2_preferences"] = {
+            **dict(state["p2_preferences"]),
+            "reputation_delta": 1,
+        }
+        eng = GameEngine(state)
+        for _ in range(4):
+            eng.play_action("p1", True)
+            eng.play_action("p2", False)
+            eng.generate_gamestate(increment_round=True)
+        gs = eng.get_gamestate()
+        assert gs["p1_reputation"] == 4
+        assert gs["p2_reputation"] == 0
+        assert gs["p1_action_history"].count("stay") == 4
+        assert gs["p2_action_history"].count("swerve") == 4
 
 
 class TestGameEngineIntegration:

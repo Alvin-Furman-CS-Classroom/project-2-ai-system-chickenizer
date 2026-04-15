@@ -27,6 +27,13 @@ class TestMakeOpponentByName:
         assert make_opponent_by_name("p2", "minimax", minimax_depth=3).depth == 3
         assert make_opponent_by_name("p1", "defensive").player == "p1"
 
+    def test_entertainer_name_and_seed(self):
+        from strategies import EntertainerStrategy  # noqa: PLC0415
+
+        e = make_opponent_by_name("p2", "entertainer", random_seed=55)
+        assert isinstance(e, EntertainerStrategy)
+        assert e.player == "p2"
+
 
 class TestEpisodeOutcomeFromResilience:
     def test_agent_p1_higher_wins(self):

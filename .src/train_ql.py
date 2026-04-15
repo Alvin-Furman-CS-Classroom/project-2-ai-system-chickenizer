@@ -26,6 +26,7 @@ from strategies import (  # noqa: E402
     AlwaysStayStrategy,
     AlwaysSwerveStrategy,
     DefensiveStrategy,
+    EntertainerStrategy,
     GameSimulator,
     HPThresholdStrategy,
     MinimaxStrategy,
@@ -48,6 +49,7 @@ OPPONENT_CHOICES = (
     "hp_threshold",
     "aggressive",
     "defensive",
+    "entertainer",
 )
 
 
@@ -82,6 +84,8 @@ def make_opponent_by_name(
         return AggressiveStrategy(player)
     if name in ("defensive", "def"):
         return DefensiveStrategy(player)
+    if name in ("entertainer", "entertain", "spectacle"):
+        return EntertainerStrategy(player, seed=random_seed)
     raise ValueError(f"Unknown opponent name: {name!r}; try one of {OPPONENT_CHOICES}")
 
 
@@ -205,7 +209,8 @@ def train_ql_agent(
 
     For string ``opponent`` names, see ``make_opponent_by_name`` / ``OPPONENT_CHOICES``.
     ``minimax_depth`` applies when ``opponent`` is ``\"minimax\"``; ``random_seed`` when
-    ``opponent`` is ``\"random\"`` (``None`` = nondeterministic).
+    ``opponent`` is ``\"random\"`` (``None`` = nondeterministic) or ``\"entertainer\"``
+    (``None`` = nondeterministic stay/swerve noise).
 
     Optional training trace: pass ``training_round_trace_out=[]`` and set
     ``training_round_trace_max_engine_rounds`` > 0 to append per-engine-round rows
@@ -383,7 +388,7 @@ def main() -> None:
         "--random-seed",
         type=int,
         default=None,
-        help="Fixed seed for random opponent; omit for different randomness each episode",
+        help="Fixed seed for random or entertainer opponent; omit for nondeterministic noise",
     )
     parser.add_argument(
         "--epsilon-start",

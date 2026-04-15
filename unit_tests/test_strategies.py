@@ -31,8 +31,10 @@ RandomStrategy = strategies_module.RandomStrategy
 HPThresholdStrategy = strategies_module.HPThresholdStrategy
 AggressiveStrategy = strategies_module.AggressiveStrategy
 DefensiveStrategy = strategies_module.DefensiveStrategy
+EntertainerStrategy = strategies_module.EntertainerStrategy
 MinimaxStrategy = strategies_module.MinimaxStrategy
 GameSimulator = strategies_module.GameSimulator
+merge_strategy_preferences = strategies_module.merge_strategy_preferences
 
 GameEngine = engine_module.GameEngine
 
@@ -134,6 +136,73 @@ class TestStatefulStrategiesBehavior:
         # Now p1 is critically low, p2 is only a bit above threshold
         assert aggressive(gs_low) is False
         assert defensive(gs_low) is False
+
+
+class TestEntertainerStrategy:
+    def test_implied_preferences_include_reputation_delta(self):
+        e = EntertainerStrategy("p1")
+        prefs = e.implied_preferences()
+        assert prefs.get("reputation_delta", 0) == 6
+        assert prefs.get("hp_delta", 0) == 1
+
+    def test_merge_strategy_preferences_merges_reputation_care(self):
+        base = GameEngine().get_gamestate()
+        merged = merge_strategy_preferences(
+            base,
+            EntertainerStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+        )
+        assert int(merged["p1_preferences"].get("reputation_delta", 0)) == 6
+        assert int(merged["p2_preferences"].get("reputation_delta", 0)) == 0
+
+    def test_deterministic_stay_bias_one_always_stays_when_healthy(self):
+        e = EntertainerStrategy("p1", stay_bias=1.0, seed=0)
+        engine = GameEngine()
+        gs = engine.get_gamestate()
+        assert e(gs) is True
+
+    def test_stay_bias_zero_always_swerves_when_above_hp_threshold(self):
+        e = EntertainerStrategy("p2", stay_bias=0.0, seed=42)
+        engine = GameEngine()
+        gs = engine.get_gamestate()
+        for _ in range(20):
+            assert e(gs) is False
+
+    def test_low_hp_forces_swerve_even_with_stay_bias_one(self):
+        e = EntertainerStrategy("p1", stay_bias=1.0, seed=0)
+        gs = GameEngine().get_gamestate()
+        gs = dict(gs)
+        gs["p1_hp"] = int(gs.get("p1_hp_thresh", 20))
+        assert e(gs) is False
+
+    def test_stay_bias_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="stay_bias"):
+            EntertainerStrategy("p1", stay_bias=1.01)
+        with pytest.raises(ValueError, match="stay_bias"):
+            EntertainerStrategy("p1", stay_bias=-0.01)
+
+    def test_simulate_entertainer_reputation_matches_stay_count(self):
+        """End-to-end: rep counter equals P2 stays for each completed round (may stop early)."""
+        sim = GameSimulator()
+        p1 = AlwaysSwerveStrategy("p1")
+        p2 = EntertainerStrategy("p2", stay_bias=1.0, seed=7)
+        result = sim.simulate(p1, p2, max_rounds=30)
+        fs = result["final_state"]
+        score = fs.get("score") or []
+        stays = sum(1 for a in fs["p2_action_history"] if a == "stay")
+        assert len(score) == stays == len(fs["p2_action_history"])
+        assert fs["p2_reputation"] == stays
+        assert fs["p1_reputation"] == 0
+        assert stays >= 1
+
+    def test_simulate_always_swerve_entertainer_never_stays_zero_reputation(self):
+        sim = GameSimulator()
+        p1 = EntertainerStrategy("p1", stay_bias=0.0, seed=0)
+        p2 = AlwaysSwerveStrategy("p2")
+        result = sim.simulate(p1, p2, max_rounds=5)
+        fs = result["final_state"]
+        assert fs["p1_action_history"] == ["swerve"] * 5
+        assert fs["p1_reputation"] == 0
 
 
 class TestMinimaxStrategy:

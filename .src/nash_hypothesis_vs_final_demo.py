@@ -9,6 +9,14 @@ Each case prints (see ``report_match_hypothesis_vs_final_nash``):
 3. **Joint play vs hypothesis** — per-cell ratio ``observed / (N · Pr_cell)`` using the
    hypothesis NE as an i.i.d. per-round reference (``--mixed-index`` picks which mixed NE).
 
+   **Reading the ratio strings:** ``—`` means either no visits and negligible expected mass,
+   or (when expected mass is ~0) a clean “empty” cell. ``>∞`` means **you observed that
+   joint action at least once, but the hypothesis NE assigns that cell essentially zero
+   probability** (common under a **pure-NE mixture**: all probability sits on equilibrium
+   cells, so off-equilibrium cells have ``N·Pr ≈ 0``). The true ratio would be a
+   divide-by-zero blow-up; ``>∞`` is shorthand for “far above the NE benchmark — empirical
+   play left the NE support.”
+
 Run from the repo root::
 
     python .src/nash_hypothesis_vs_final_demo.py
@@ -17,9 +25,15 @@ One case (1-based index), mixed NE lines + use the second mixed equilibrium for 
 
     python .src/nash_hypothesis_vs_final_demo.py --case 3 --mixed --mixed-index 1
 
+**Testing (CI smoke):** tabular Q vs entertainer opponent (short training + greedy sim)::
+
+    pytest -q unit_tests/test_ql_strategy.py::TestQLearningSmoke::test_train_ql_vs_entertainer_smoke
+
 Strategies span simple constants → reactive / search / HP-aware → tabular RL.
-RL cases (11–12) **train** the Q-agent against the listed opponent before the ASCII
-match, then set ``epsilon=0`` so the recap uses a **greedy** replay.
+RL cases (11–14) **train** the Q-agent against the listed opponent before the ASCII
+match, then set ``epsilon=0`` so the recap uses a **greedy** replay. Cases 11–13 seat the
+learner as **P1**; case **14** seats the learner as **P2** (``agent_plays_p1=False`` in
+``train_ql_agent``).
 ``--mixed`` adds mixed NE lines to the two grids and fills ``mixed_equilibria`` so the
 joint table can use a **mixed** reference; without it, the joint table uses a **uniform
 mixture over pure Nash** cells (see ``hypothesis_joint_distribution``).
@@ -43,6 +57,7 @@ from strategies import (  # noqa: E402
     AlwaysStayStrategy,
     AlwaysSwerveStrategy,
     DefensiveStrategy,
+    EntertainerStrategy,
     HPThresholdStrategy,
     MinimaxStrategy,
     RandomStrategy,
@@ -86,7 +101,12 @@ _DEMO_QL_TRAIN_EPISODES = 150
 _DEMO_QL_TRAIN_MAX_ROUNDS = 12
 
 
-def _train_p1_ql_for_demo(agent_seed: int, opponent_name: str):
+def _train_p1_ql_for_demo(
+    agent_seed: int,
+    opponent_name: str,
+    *,
+    opponent_random_seed: Optional[int] = None,
+):
     """Return a P1 ``QLearningStrategy`` trained vs ``opponent_name``; ε=0 for greedy replay."""
     from ql_strategy import QLearningStrategy  # noqa: PLC0415
     from train_ql import train_ql_agent  # noqa: PLC0415
@@ -99,6 +119,32 @@ def _train_p1_ql_for_demo(agent_seed: int, opponent_name: str):
         max_rounds=_DEMO_QL_TRAIN_MAX_ROUNDS,
         epsilon_start=0.25,
         epsilon_end=0.05,
+        random_seed=opponent_random_seed,
+    )
+    agent.epsilon = 0.0
+    return agent
+
+
+def _train_p2_ql_for_demo(
+    agent_seed: int,
+    opponent_name: str,
+    *,
+    opponent_random_seed: Optional[int] = None,
+):
+    """Return a P2 ``QLearningStrategy`` trained with the Q-agent on the **right** seat."""
+    from ql_strategy import QLearningStrategy  # noqa: PLC0415
+    from train_ql import train_ql_agent  # noqa: PLC0415
+
+    agent = QLearningStrategy("p2", seed=agent_seed, epsilon=0.15)
+    train_ql_agent(
+        agent,
+        opponent_name,
+        episodes=_DEMO_QL_TRAIN_EPISODES,
+        max_rounds=_DEMO_QL_TRAIN_MAX_ROUNDS,
+        epsilon_start=0.25,
+        epsilon_end=0.05,
+        agent_plays_p1=False,
+        random_seed=opponent_random_seed,
     )
     agent.epsilon = 0.0
     return agent
@@ -113,6 +159,19 @@ def _ql_vs_hp_threshold() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]
     """Trained tabular RL vs HPThresholdStrategy; post-match NE reflects a greedy replay path."""
     p1 = _train_p1_ql_for_demo(19, "hp_threshold")
     return (p1, HPThresholdStrategy("p2"), None)
+
+
+def _ql_vs_entertainer() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]:
+    """Trained vs ``entertainer`` name; greedy replay uses same ``EntertainerStrategy`` seed."""
+    opp_seed = 31
+    p1 = _train_p1_ql_for_demo(29, "entertainer", opponent_random_seed=opp_seed)
+    return (p1, EntertainerStrategy("p2", seed=opp_seed), None)
+
+
+def _tft_vs_ql_p2() -> Tuple[Strategy, Strategy, Optional[Dict[str, Any]]]:
+    """P1 fixed Tit-for-Tat; P2 tabular RL trained *as P2* vs TFT on P1, then greedy replay."""
+    p2 = _train_p2_ql_for_demo(41, "tit_for_tat")
+    return (TitForTatStrategy("p1"), p2, None)
 
 
 # (title, factory, max_rounds)
@@ -192,6 +251,17 @@ CASES: List[Tuple[str, StrategyPairFactory, int]] = [
         "12) RL — QLearningStrategy (trained vs hp_threshold, greedy display) vs "
         "HPThresholdStrategy (P2)",
         _ql_vs_hp_threshold,
+        14,
+    ),
+    (
+        "13) RL — QLearningStrategy (trained vs entertainer, greedy display) vs "
+        "EntertainerStrategy (P2; spectacle / reputation prefs, seed=31)",
+        _ql_vs_entertainer,
+        14,
+    ),
+    (
+        "14) RL — TitForTat (P1) vs QLearningStrategy (P2; trained as P2 vs TFT, greedy)",
+        _tft_vs_ql_p2,
         14,
     ),
 ]

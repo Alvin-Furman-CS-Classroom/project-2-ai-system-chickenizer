@@ -42,7 +42,8 @@ def _reset_for_one_shot(state: Dict[str, Any]) -> Dict[str, Any]:
     """Isolate one counterfactual round without wiping resilience.
 
     We clear round/history/score so the hypothetical is a single joint move, but we
-    **keep** ``p1_resilience`` and ``p2_resilience`` from ``state``. Each matrix cell
+    **keep** ``p1_resilience``, ``p2_resilience``, ``p1_reputation``, and ``p2_reputation``
+    from ``state``. Each matrix cell
     is then **final resilience after that counterfactual round** from the current
     baseline (so values move with the match and coloring stays meaningful). Pure
     Nash indices are unchanged vs a zero baseline (payoffs are an additive shift).
@@ -59,6 +60,8 @@ def _reset_for_one_shot(state: Dict[str, Any]) -> Dict[str, Any]:
     s["p1_resilience"] = p1r
     s["p2_resilience"] = p2r
     s["resilience_diff"] = p1r - p2r
+    s["p1_reputation"] = int(s.get("p1_reputation", 0))
+    s["p2_reputation"] = int(s.get("p2_reputation", 0))
     return s
 
 

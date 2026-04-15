@@ -16,7 +16,12 @@ from ql_strategy import (  # noqa: E402
     encode_ql_state,
     terminal_margin_bonus,
 )
-from strategies import AlwaysSwerveStrategy, GameSimulator  # noqa: E402
+from strategies import (  # noqa: E402
+    AlwaysSwerveStrategy,
+    EntertainerStrategy,
+    GameSimulator,
+)
+from train_ql import train_ql_agent  # noqa: E402
 
 
 class TestTerminalMarginBonus:
@@ -104,6 +109,27 @@ class TestQLearningSmoke:
         r = sim.simulate(p1, p2, max_rounds=5)
         assert r["summary"]["rounds_played"] == 5
         assert len(p1.q) > 0
+
+    def test_train_ql_vs_entertainer_smoke(self):
+        """Short ``train_ql_agent`` run vs spectacle opponent (reputation prefs); no crashes."""
+        agent = QLearningStrategy("p1", seed=101, epsilon=0.2)
+        _, rows, stats = train_ql_agent(
+            agent,
+            "entertainer",
+            episodes=10,
+            max_rounds=7,
+            epsilon_start=0.35,
+            epsilon_end=0.12,
+            random_seed=404,
+        )
+        assert len(rows) == 10
+        assert stats.episodes == 10
+        assert stats.opponent == "EntertainerStrategy"
+        assert len(agent.q) > 0
+        sim = GameSimulator()
+        agent.epsilon = 0.0
+        r2 = sim.simulate(agent, EntertainerStrategy("p2", seed=404), max_rounds=7)
+        assert r2["summary"]["rounds_played"] >= 1
 
     def test_finalize_idempotent_safe(self):
         p1 = QLearningStrategy("p1", seed=1)

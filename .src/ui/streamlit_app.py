@@ -51,10 +51,18 @@ from strategies import (  # type: ignore  # noqa: E402
     HPThresholdStrategy,
     AggressiveStrategy,
     DefensiveStrategy,
+    EntertainerStrategy,
     MinimaxStrategy,
 )
 
-PREFERENCE_KEYS: Tuple[str, ...] = ("round_win", "round_loss", "tie", "crash", "hp_delta")
+PREFERENCE_KEYS: Tuple[str, ...] = (
+    "round_win",
+    "round_loss",
+    "tie",
+    "crash",
+    "hp_delta",
+    "reputation_delta",
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,7 @@ STRATEGIES: List[StrategyChoice] = [
     StrategyChoice("HP Threshold", HPThresholdStrategy),
     StrategyChoice("Aggressive (HP)", AggressiveStrategy),
     StrategyChoice("Defensive (HP)", DefensiveStrategy),
+    StrategyChoice("Entertainer (spectacle / stay)", EntertainerStrategy),
     StrategyChoice("Minimax (resilience diff)", MinimaxStrategy),
 ]
 
@@ -165,6 +174,38 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
         params["depth"] = int(
             st.slider(f"{label_prefix} minimax depth (rounds)", min_value=1, max_value=6, value=2, step=1, key=f"{label_prefix}_minimax_depth")
         )
+
+    if cls is EntertainerStrategy:
+        params["stay_bias"] = float(
+            st.slider(
+                f"{label_prefix} entertainer stay bias",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.72,
+                step=0.01,
+                key=f"{label_prefix}_entertainer_stay_bias",
+            )
+        )
+        use_seed = st.checkbox(
+            f"{label_prefix} entertainer use seed",
+            value=False,
+            key=f"{label_prefix}_entertainer_use_seed",
+        )
+        seed = (
+            int(
+                st.number_input(
+                    f"{label_prefix} entertainer seed",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=f"{label_prefix}_entertainer_seed",
+                )
+            )
+            if use_seed
+            else 0
+        )
+        params["seed"] = int(seed) if use_seed else None
+
     return params
 
 
@@ -180,7 +221,7 @@ def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
     """
     st.caption(f'{player}\'s preference cares.')
     prefs: Dict[str, int] = {}
-    cols = st.columns(5)
+    cols = st.columns(len(PREFERENCE_KEYS))
     for i, key in enumerate(PREFERENCE_KEYS):
         with cols[i]:
             prefs[key] = int(st.number_input(f"{player} {key}", value=int(base.get(key, 0)), step=1, key=f"{player}_pref_{key}"))

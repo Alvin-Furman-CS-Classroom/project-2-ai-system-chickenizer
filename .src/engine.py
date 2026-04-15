@@ -46,6 +46,10 @@ class GameEngine:
         "p2_resilience": 0,
         # Convenience field for differential resilience used by minimax: R1 - R2.
         "resilience_diff": 0,
+        # Spectacle / audience meter: incremented in ``play_action`` only when that player
+        # **cares** (non-zero ``reputation_delta`` in their merged ``*_preferences``) and stays.
+        "p1_reputation": 0,
+        "p2_reputation": 0,
         # Per-player preference weights for translating round outcomes and HP
         # changes into resilience updates. "Cares about X" == non-zero weight.
         "p1_preferences": {
@@ -54,6 +58,8 @@ class GameEngine:
             "tie": 0,
             "crash": -15,
             "hp_delta": 0,  # default: P1 does not care about HP unless overridden
+            # Each time this player *stays* in a resolved round, add this to resilience.
+            "reputation_delta": 0,
         },
         "p2_preferences": {
             "round_win": 10,
@@ -61,6 +67,7 @@ class GameEngine:
             "tie": 0,
             "crash": -15,
             "hp_delta": 0,  # default: P2 does not care about HP unless overridden
+            "reputation_delta": 0,
         },
         # Set by ``run_game`` when the loop ends: ``round_cap`` or ``is_game_over`` reason.
         "match_end_reason": "",
@@ -157,6 +164,14 @@ class GameEngine:
             self.gamestate["p1_resilience"] += delta_p1_hp * hp_weight_p1
         if delta_p2_hp != 0 and hp_weight_p2 != 0:
             self.gamestate["p2_resilience"] += delta_p2_hp * hp_weight_p2
+
+        # Spectacle: optional resilience bump when this player chose stay (blood sport).
+        rep_w1 = int(p1_prefs.get("reputation_delta", 0))
+        rep_w2 = int(p2_prefs.get("reputation_delta", 0))
+        if self.gamestate["p1_stay"] and rep_w1 != 0:
+            self.gamestate["p1_resilience"] += rep_w1
+        if self.gamestate["p2_stay"] and rep_w2 != 0:
+            self.gamestate["p2_resilience"] += rep_w2
         
         # Update resilience differential
         self.gamestate["resilience_diff"] = (
@@ -221,6 +236,11 @@ class GameEngine:
         # Append action to player's history
         action_str = "stay" if action else "swerve"
         self.gamestate[f"{player}_action_history"].append(action_str)
+        if action:
+            prefs = self.gamestate.get(f"{player}_preferences", {})
+            if int(prefs.get("reputation_delta", 0)) != 0:
+                rep_key = f"{player}_reputation"
+                self.gamestate[rep_key] = int(self.gamestate.get(rep_key, 0)) + 1
 
         return self.get_gamestate()
 
@@ -297,6 +317,8 @@ class GameEngine:
         self.gamestate["p1_resilience"] = 0
         self.gamestate["p2_resilience"] = 0
         self.gamestate["resilience_diff"] = 0
+        self.gamestate["p1_reputation"] = 0
+        self.gamestate["p2_reputation"] = 0
         self.gamestate["match_end_reason"] = ""
 
         # New match: revive HP if a prior game left anyone at/below zero (same engine).

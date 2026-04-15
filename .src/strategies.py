@@ -271,6 +271,41 @@ class DefensiveStrategy(Strategy):
         return {"hp_delta": 1}
 
 
+class EntertainerStrategy(Strategy):
+    """Spectacle-seeking style: the crowd rewards **stay** (see engine ``p*_reputation``).
+
+    The engine increments ``p*_reputation`` when that player stays **and** their merged
+    preferences have non-zero ``reputation_delta`` (same "cares" rule as ``hp_delta``).
+    This strategy declares ``reputation_delta`` so those stays also move **resilience**
+    (same moment as round-outcome updates). It still cares about HP a little, and when
+    healthy it biases toward stay for the show (stochastic so matches are not pure
+    always-stay unless RNG rolls that way).
+    """
+
+    def __init__(
+        self,
+        player: str,
+        *,
+        stay_bias: float = 0.72,
+        seed: Optional[int] = None,
+    ):
+        super().__init__(player)
+        if not 0.0 <= stay_bias <= 1.0:
+            raise ValueError("stay_bias must be in [0, 1]")
+        self.stay_bias = float(stay_bias)
+        self._rng = random.Random(seed) if seed is not None else random
+
+    def decide(self, gamestate: Dict[str, Any]) -> bool:
+        hp_thresh = int(gamestate.get(f"{self.player}_hp_thresh", 20))
+        current_hp = int(gamestate.get(f"{self.player}_hp", 100))
+        if current_hp <= hp_thresh:
+            return False
+        return self._rng.random() < self.stay_bias
+
+    def implied_preferences(self) -> Dict[str, int]:
+        return {"reputation_delta": 6, "hp_delta": 1}
+
+
 class MinimaxStrategy(Strategy):
     """Depth-limited minimax strategy assuming resilience-based zero-sum game.
     

@@ -29,6 +29,7 @@ from strategies import (  # noqa: E402
     AlwaysStayStrategy,
     AlwaysSwerveStrategy,
     DefensiveStrategy,
+    EntertainerStrategy,
     HPThresholdStrategy,
     merge_strategy_preferences,
 )
@@ -302,6 +303,46 @@ class TestJointPlayVsHypothesis:
         assert r[1] == ">∞"
 
 
+class TestReputationOneShotPayoffs:
+    """``reputation_delta`` flows through one-shot cells via ``GameEngine`` (same as live play)."""
+
+    def test_reset_for_one_shot_preserves_reputation_counters(self):
+        base = GameEngine().get_gamestate()
+        merged = merge_strategy_preferences(
+            base, EntertainerStrategy("p1"), AlwaysSwerveStrategy("p2")
+        )
+        merged["p1_reputation"] = 42
+        merged["p2_reputation"] = 5
+        reset = nash_nf._reset_for_one_shot(merged)
+        assert reset["p1_reputation"] == 42
+        assert reset["p2_reputation"] == 5
+        assert reset["p1_action_history"] == []
+
+    def test_entertainer_swerve_rows_match_baseline_without_stay(self):
+        base_sw, base_p2 = build_payoff_matrices(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+        )
+        ent_sw, ent_p2 = build_payoff_matrices(
+            EntertainerStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+        )
+        assert ent_sw[0] == base_sw[0]
+        assert ent_p2[0] == base_p2[0]
+
+    def test_entertainer_stay_swerve_cell_adds_exact_reputation_delta_to_p1(self):
+        base_sw, _ = build_payoff_matrices(
+            AlwaysSwerveStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+        )
+        ent_sw, _ = build_payoff_matrices(
+            EntertainerStrategy("p1"),
+            AlwaysSwerveStrategy("p2"),
+        )
+        # Row Stay × col Swerve: P1 wins the round; entertainer alone adds ``reputation_delta``.
+        assert ent_sw[1][0] == base_sw[1][0] + 6
+
+
 class TestMergeStrategyPreferences:
     def test_merge_combines_implied_prefs(self):
         eng = GameEngine()
@@ -311,6 +352,14 @@ class TestMergeStrategyPreferences:
         )
         assert merged["p1_preferences"].get("hp_delta") == 1
         assert merged["p2_preferences"].get("hp_delta") == 1
+
+    def test_merge_entertainer_sets_reputation_delta(self):
+        base = GameEngine().get_gamestate()
+        merged = merge_strategy_preferences(
+            base, EntertainerStrategy("p1"), AlwaysSwerveStrategy("p2")
+        )
+        assert int(merged["p1_preferences"].get("reputation_delta", 0)) == 6
+        assert int(merged["p2_preferences"].get("reputation_delta", 0)) == 0
 
 
 class TestPerRoundNormalForms:

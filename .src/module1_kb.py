@@ -60,9 +60,12 @@ except (ImportError, FileNotFoundError, OSError):
         _src_dir = os.path.dirname(os.path.abspath(__file__))
         _logger_path = os.path.join(_src_dir, "debug_logger.py")
         _spec = importlib.util.spec_from_file_location("debug_logger", _logger_path)
-        _log_mod = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(_log_mod)
-        _logger = _log_mod.get_debug_logger("module1_kb")
+        if _spec is None or _spec.loader is None:
+            _logger = _NoOpLogger()
+        else:
+            _log_mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_log_mod)
+            _logger = _log_mod.get_debug_logger("module1_kb")
     # ensure no crashes occur if debug_logger.py is not found
     except (ImportError, FileNotFoundError, OSError):
         _logger = _NoOpLogger()
@@ -354,10 +357,10 @@ class KnowledgeBase:
             True if every clause is a disjunction of literals (sp.Or) or a single literal.
         """
         # CNF: top-level AND of clauses; each clause is OR of literals OR a literal itself.
-        def _is_literal(expr: sp.Expr) -> bool:
+        def _is_literal(expr: sp.Basic) -> bool:
             return isinstance(expr, sp.Symbol) or (isinstance(expr, sp.Not) and isinstance(expr.args[0], sp.Symbol))
 
-        def _is_clause(expr: sp.Expr) -> bool:
+        def _is_clause(expr: sp.Basic) -> bool:
             if _is_literal(expr):
                 return True
             if isinstance(expr, sp.Or):
@@ -467,7 +470,7 @@ class KnowledgeBase:
         return self.forward_chain()
     
 
-    def forward_chain(self, query: sp.Basic = None) -> list[sp.Basic]:
+    def forward_chain(self, query: Optional[sp.Basic] = None) -> list[sp.Basic]:
         """
         Forward chain from known facts. Used by forward_chain_derive_query() and infer_consequences() for different purposes.
 
@@ -648,7 +651,7 @@ class ChickenKB(KnowledgeBase):
         self.rnd_history = {}
         _logger.debug("reset_kb(): ChickenKB reset complete")
 
-def _clause_to_str(clause: sp.Expr) -> str:
+def _clause_to_str(clause: sp.Basic) -> str:
     """Format a single clause for display (Implies as 'a -> b', Equivalent as 'a <=> b', else str)."""
     if isinstance(clause, sp.Implies):
         return f"({clause.args[0]} -> {clause.args[1]})"
@@ -657,7 +660,7 @@ def _clause_to_str(clause: sp.Expr) -> str:
     return str(clause)
 
 
-def render_path(path: list[sp.Expr], forward: bool = True) -> str:
+def render_path(path: list[sp.Basic], forward: bool = True) -> str:
     """Render a path of clauses as a single string (e.g. for forward/backward chain output).
 
     Args:
