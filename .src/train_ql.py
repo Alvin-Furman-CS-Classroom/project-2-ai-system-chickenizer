@@ -32,6 +32,8 @@ from strategies import (  # noqa: E402
     RandomStrategy,
     Strategy,
     TitForTatStrategy,
+    resilience_leader_p1_seat,
+    resilience_margin_p1_minus_p2,
 )
 
 OpponentSpec = Union[str, Strategy, Callable[[], Strategy]]
@@ -290,6 +292,8 @@ def train_ql_agent(
                 "p1_resilience": fs.get("p1_resilience"),
                 "p2_resilience": fs.get("p2_resilience"),
                 "resilience_diff": fs.get("resilience_diff"),
+                "resilience_margin_p1_minus_p2": resilience_margin_p1_minus_p2(fs),
+                "resilience_leader": resilience_leader_p1_seat(fs),
                 "p1_wins": s.get("p1_wins"),
                 "p2_wins": s.get("p2_wins"),
             }
@@ -439,10 +443,13 @@ def main() -> None:
     print("Training complete")
     print(f"  Episodes: {stats.episodes}  Opponent: {stats.opponent}")
     print(
-        f"  Episode outcomes (final resilience margin vs opponent): "
-        f"agent {stats.wins}, opp {stats.losses}, ties {stats.ties}"
+        f"  Episode outcomes (final resilience margin — agent win/loss/tie): "
+        f"{stats.wins} / {stats.losses} / {stats.ties}"
     )
-    print(f"  Sum of round outcomes — P1 wins: {stats.total_p1_wins_in_score}, P2: {stats.total_p2_wins_in_score}")
+    print(
+        f"  Sum of per-round score labels (not margin): "
+        f"P1={stats.total_p1_wins_in_score}, P2={stats.total_p2_wins_in_score}"
+    )
     print(f"  Q table size (states): {len(agent.q)}")
     if trace_out:
         print()

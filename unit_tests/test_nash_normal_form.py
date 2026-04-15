@@ -223,6 +223,10 @@ class TestNashAsciiVisual:
         assert "Payoff matrices identical:" in report
         assert "Pure NE set identical:" in report
         assert "Match recap:" in report
+        assert "resilience margin (P1−P2):" in report
+        assert "round score tallies:" in report
+        assert "final HP P1=" in report and "P2=" in report
+        assert "Joint play vs hypothesis NE" in report
 
     def test_stacked_hypothesis_final_ascii(self):
         hyp = nash_nf.analyze_normal_form(
@@ -250,6 +254,52 @@ class TestNashAsciiVisual:
         )
         print("\n" + report + "\n")
         assert "hypothesis pure NE:" in report
+
+
+class TestJointPlayVsHypothesis:
+    def test_empirical_joint_counts_all_swerve(self):
+        fs = {
+            "p1_action_history": ["swerve"] * 4,
+            "p2_action_history": ["swerve"] * 4,
+        }
+        assert nash_nf.empirical_joint_action_counts(fs) == (4, 0, 0, 0)
+
+    def test_empirical_joint_counts_mixed_cells(self):
+        fs = {
+            "p1_action_history": ["swerve", "stay", "stay"],
+            "p2_action_history": ["stay", "swerve", "stay"],
+        }
+        # (Sw,Sw)=0 (Sw,St)=1 (St,Sw)=2 (St,St)=3
+        assert nash_nf.empirical_joint_action_counts(fs) == (0, 1, 1, 1)
+
+    def test_hypothesis_pure_uniform_two_cells(self):
+        hyp = nash_nf.NormalFormResult(
+            payoff_p1=[[0, 0], [0, 0]],
+            payoff_p2=[[0, 0], [0, 0]],
+            p1_strategy_name="X",
+            p2_strategy_name="Y",
+            pure_nash_indices=[(0, 1), (1, 0)],
+            mixed_equilibria=[],
+        )
+        p = nash_nf.hypothesis_joint_distribution(hyp)
+        assert p[0] == pytest.approx(0.0)
+        assert p[1] == pytest.approx(0.5)
+        assert p[2] == pytest.approx(0.5)
+        assert p[3] == pytest.approx(0.0)
+
+    def test_joint_ratio_on_equilibrium_path_is_one(self):
+        counts = (2, 0, 0, 0)
+        probs = (1.0, 0.0, 0.0, 0.0)
+        r = nash_nf.joint_play_ratio_strings(counts, probs, n_rounds=2)
+        assert r[0] == "1.00"
+        assert r[1] == "—"
+
+    def test_joint_ratio_off_support_observed_is_infinity_token(self):
+        counts = (0, 1, 0, 0)
+        probs = (0.0, 0.0, 1.0, 0.0)
+        r = nash_nf.joint_play_ratio_strings(counts, probs, n_rounds=1)
+        assert r[0] == "—"
+        assert r[1] == ">∞"
 
 
 class TestMergeStrategyPreferences:

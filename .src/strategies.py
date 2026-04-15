@@ -119,6 +119,26 @@ def merge_strategy_preferences(
     return state
 
 
+def resilience_margin_p1_minus_p2(gamestate: Dict[str, Any]) -> float:
+    """Signed resilience margin P1−P2 (same sign convention as engine ``resilience_diff``)."""
+    raw = gamestate.get("resilience_diff")
+    if raw is not None:
+        return float(raw)
+    return float(
+        int(gamestate.get("p1_resilience", 0)) - int(gamestate.get("p2_resilience", 0))
+    )
+
+
+def resilience_leader_p1_seat(gamestate: Dict[str, Any]) -> str:
+    """Who leads on resilience: ``\"p1\"``, ``\"p2\"``, or ``\"tie\"``."""
+    m = resilience_margin_p1_minus_p2(gamestate)
+    if m > 0:
+        return "p1"
+    if m < 0:
+        return "p2"
+    return "tie"
+
+
 class AlwaysStayStrategy(Strategy):
     """Strategy that always chooses to stay."""
     
@@ -440,6 +460,8 @@ class GameSimulator:
         p2_wins = score.count("P2")
         ties = score.count("TIE")
         crashes = score.count("CRASH")
+        margin = resilience_margin_p1_minus_p2(final_state)
+        leader = resilience_leader_p1_seat(final_state)
 
         summary = {
             "rounds_played": final_state.get("round", 0),
@@ -449,6 +471,8 @@ class GameSimulator:
             "p2_wins": p2_wins,
             "ties": ties,
             "crashes": crashes,
+            "resilience_margin_p1_minus_p2": margin,
+            "resilience_leader": leader,
             "p1_strategy": p1_strategy.__class__.__name__,
             "p2_strategy": p2_strategy.__class__.__name__,
         }
@@ -486,7 +510,11 @@ class GameSimulator:
         print(f"  P1: {summary['p1_hp']}")
         print(f"  P2: {summary['p2_hp']}")
         print()
-        print("Round Outcomes:")
+        print("Resilience (end of match, P1−P2 margin):")
+        m = summary.get("resilience_margin_p1_minus_p2")
+        ld = summary.get("resilience_leader", "?")
+        print(f"  Margin: {m:+.1f}  →  leader: {ld}")
+        print("Round score tallies (P1 stayed / P2 swerved style):")
         print(f"  P1 Wins: {summary['p1_wins']}")
         print(f"  P2 Wins: {summary['p2_wins']}")
         print(f"  Ties: {summary['ties']}")

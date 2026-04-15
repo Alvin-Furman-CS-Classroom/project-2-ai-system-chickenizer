@@ -91,6 +91,8 @@ class TestTrainQlAgent:
         assert stats.episodes == 8
         assert stats.agent_role == "p1"
         assert len(agent.q) > 0
+        assert "resilience_leader" in rows[0]
+        assert "resilience_margin_p1_minus_p2" in rows[0]
 
     def test_short_run_vs_tit_for_tat(self):
         agent = QLearningStrategy("p1", seed=7)
@@ -102,6 +104,27 @@ class TestTrainQlAgent:
         )
         assert stats.episodes == 4
         assert "TitForTat" in stats.opponent
+
+
+class TestTrainVsHpThresholdOpponent:
+    def test_q_learning_accumulates_q_against_hp_threshold(self):
+        """HPThreshold swerves when HP is low; margin-based TD fills Q(s,·) exploitably."""
+
+        def q_action_spread(ag: QLearningStrategy) -> float:
+            return sum(abs(ag.q[s][False] - ag.q[s][True]) for s in ag.q)
+
+        agent = QLearningStrategy("p1", seed=3)
+        assert q_action_spread(agent) == 0.0
+        train_ql_agent(
+            agent,
+            "hp_threshold",
+            episodes=120,
+            max_rounds=12,
+            epsilon_start=0.25,
+            epsilon_end=0.05,
+        )
+        assert len(agent.q) >= 5
+        assert q_action_spread(agent) > 40.0
 
 
 class TestExplorationMatchesEpsilonGreedy:

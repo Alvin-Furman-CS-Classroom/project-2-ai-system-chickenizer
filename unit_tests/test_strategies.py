@@ -181,10 +181,12 @@ class TestGameSimulatorIntegration:
         result = sim.simulate(p1, p2, max_rounds=5)
         summary = result["summary"]
 
-        # P1 should win every round
+        # P1 should win every round (round score), and lead on resilience margin.
         assert summary["p1_wins"] == 5
         assert summary["p2_wins"] == 0
         assert summary["crashes"] == 0
+        assert summary["resilience_leader"] == "p1"
+        assert float(summary["resilience_margin_p1_minus_p2"]) > 0
 
     def test_consecutive_simulates_fresh_hp_each_match(self):
         """Same ``GameSimulator`` must not reuse 0 HP from a finished crash-heavy game."""

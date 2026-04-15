@@ -12,14 +12,24 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 try:
     from .engine import GameEngine
-    from .strategies import Strategy, merge_strategy_preferences
+    from .strategies import (
+        Strategy,
+        merge_strategy_preferences,
+        resilience_leader_p1_seat,
+        resilience_margin_p1_minus_p2,
+    )
 except ImportError:
     from engine import GameEngine  # type: ignore
-    from strategies import Strategy, merge_strategy_preferences  # type: ignore
+    from strategies import (  # type: ignore
+        Strategy,
+        merge_strategy_preferences,
+        resilience_leader_p1_seat,
+        resilience_margin_p1_minus_p2,
+    )
 
 ACTION_ORDER: Tuple[bool, bool] = (False, True)
 ACTION_LABELS: Tuple[str, str] = ("Swerve", "Stay")
@@ -133,6 +143,16 @@ def find_pure_nash(
     return out
 
 
+def _mixed_probs_to_pair(vec: Any) -> Tuple[float, float]:
+    """Normalize nashpy / numpy strategy vector to (p_swerve, p_stay) with length 2."""
+    import numpy as np
+
+    arr = np.asarray(vec, dtype=float).reshape(-1)
+    if arr.size != 2:
+        raise ValueError(f"expected 2-action support; got size {arr.size}")
+    return (round(float(arr[0]), 6), round(float(arr[1]), 6))
+
+
 def find_mixed_nash(
     payoff_p1: Sequence[Sequence[int]],
     payoff_p2: Sequence[Sequence[int]],
@@ -146,9 +166,11 @@ def find_mixed_nash(
     game = nash.Game(a, b)
     seen: set[Tuple[Tuple[float, float], Tuple[float, float]]] = set()
     result: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
-    for sigma, rho in game.support_enumeration():
-        sig_t = tuple(round(float(x), 6) for x in sigma)
-        rho_t = tuple(round(float(y), 6) for y in rho)
+    # nashpy stubs are incomplete; cast so unpack + ndarray handling type-check.
+    equilibria = cast(Iterable[Tuple[Any, Any]], game.support_enumeration())
+    for sigma, rho in equilibria:
+        sig_t = _mixed_probs_to_pair(sigma)
+        rho_t = _mixed_probs_to_pair(rho)
         key = (sig_t, rho_t)
         if key not in seen:
             seen.add(key)
@@ -167,6 +189,115 @@ class NormalFormResult:
     mixed_equilibria: List[Tuple[Tuple[float, float], Tuple[float, float]]] = field(
         default_factory=list
     )
+
+
+def _joint_flat_index_from_row_col(i: int, j: int) -> int:
+    """Row i / col j follow ``ACTION_ORDER`` (0=Swerve, 1=Stay)."""
+    return 2 * int(i) + int(j)
+
+
+def empirical_joint_action_counts(
+    final_state: Dict[str, Any],
+) -> Tuple[int, int, int, int]:
+    """Count joint (P1 row, P2 col) over completed rounds; order matches payoff matrix."""
+    h1 = final_state.get("p1_action_history") or []
+    h2 = final_state.get("p2_action_history") or []
+    if len(h1) != len(h2):
+        raise ValueError(
+            f"P1/P2 history length mismatch: {len(h1)} vs {len(h2)}"
+        )
+    counts = [0, 0, 0, 0]
+    for a1, a2 in zip(h1, h2):
+        if a1 not in ("stay", "swerve") or a2 not in ("stay", "swerve"):
+            raise ValueError(f"invalid action strings: {a1!r}, {a2!r}")
+        i = 1 if a1 == "stay" else 0
+        j = 1 if a2 == "stay" else 0
+        counts[_joint_flat_index_from_row_col(i, j)] += 1
+    return (int(counts[0]), int(counts[1]), int(counts[2]), int(counts[3]))
+
+
+def hypothesis_joint_distribution(
+    hypothesis: NormalFormResult,
+    *,
+    mixed_index: int = 0,
+) -> Tuple[float, float, float, float]:
+    """Per-cell probabilities Pr(P1 row, P2 col) under a **hypothesis** NE (i.i.d. per round).
+
+    - If ``mixed_equilibria`` is non-empty: independent mixing from
+      ``mixed_equilibria[mixed_index]`` (σ over P1 rows, ρ over P2 cols).
+    - Else if ``pure_nash_indices`` is non-empty: **uniform** mixture over those
+      pure cells (each equilibrium cell gets equal total mass).
+    - Else: uniform ``1/4`` on all cells.
+
+    For pure-only hypotheses, cells off all pure supports have **zero** expected
+    mass; use ``joint_play_ratio_strings`` for display rules.
+    """
+    if hypothesis.mixed_equilibria:
+        idx = max(0, min(mixed_index, len(hypothesis.mixed_equilibria) - 1))
+        sig, rho = hypothesis.mixed_equilibria[idx]
+        flat: List[float] = []
+        for i in range(2):
+            for j in range(2):
+                flat.append(float(sig[i]) * float(rho[j]))
+        return (flat[0], flat[1], flat[2], flat[3])
+    if hypothesis.pure_nash_indices:
+        n = len(hypothesis.pure_nash_indices)
+        pt = [0.0, 0.0, 0.0, 0.0]
+        for (i, j) in hypothesis.pure_nash_indices:
+            k = _joint_flat_index_from_row_col(int(i), int(j))
+            pt[k] += 1.0 / float(n)
+        return (pt[0], pt[1], pt[2], pt[3])
+    return (0.25, 0.25, 0.25, 0.25)
+
+
+def joint_play_ratio_strings(
+    counts: Sequence[int],
+    expected_probs: Sequence[float],
+    *,
+    n_rounds: int,
+) -> Tuple[str, str, str, str]:
+    """Text ratio ``observed / (N · p_cell)`` for each flat joint index."""
+    out: List[str] = []
+    for k in range(4):
+        obs = int(counts[k])
+        exp_n = float(n_rounds) * float(expected_probs[k])
+        if exp_n <= 1e-12:
+            out.append("—" if obs == 0 else ">∞")
+        else:
+            out.append(f"{obs / exp_n:.2f}")
+    return (out[0], out[1], out[2], out[3])
+
+
+def format_joint_play_vs_hypothesis_ascii(
+    counts: Sequence[int],
+    hypothesis: NormalFormResult,
+    *,
+    n_rounds: int,
+    mixed_index: int = 0,
+) -> str:
+    """2×2 ASCII table: observed / expected frequency under hypothesis NE (i.i.d. per round)."""
+    probs = hypothesis_joint_distribution(hypothesis, mixed_index=mixed_index)
+    ratios = joint_play_ratio_strings(counts, probs, n_rounds=n_rounds)
+    exp_counts = [float(n_rounds) * float(p) for p in probs]
+    lbl = hypothesis.action_labels
+    hyp_src = (
+        f"mixed[{mixed_index}]"
+        if hypothesis.mixed_equilibria
+        else ("pure mix" if hypothesis.pure_nash_indices else "uniform")
+    )
+    w = max(6, max(len(r) for r in ratios) + 2)
+    lines = [
+        "=" * 62,
+        "Joint play vs hypothesis NE (each cell: observed / (N · Pr_cell under NE))",
+        f"  N = {n_rounds} completed rounds  |  hypothesis source: {hyp_src}",
+        f"  counts (Sw+Sw / Sw+St / St+Sw / St+St) = {tuple(counts)}",
+        f"  N·p expected counts ≈ {[round(x, 3) for x in exp_counts]}",
+        "",
+        f"{'':>10}  {'P2 ' + lbl[0]:<{w}}  {'P2 ' + lbl[1]:<{w}}",
+        f"{'P1 ' + lbl[0]:>10}  {ratios[0]:^{w}}  {ratios[1]:^{w}}",
+        f"{'P1 ' + lbl[1]:>10}  {ratios[2]:^{w}}  {ratios[3]:^{w}}",
+    ]
+    return "\n".join(lines)
 
 
 def analyze_normal_form(
@@ -391,12 +522,17 @@ def report_match_hypothesis_vs_final_nash(
     max_rounds: int = 10,
     initial_gamestate: Optional[Dict[str, Any]] = None,
     include_mixed: bool = False,
+    joint_mixed_index: int = 0,
 ) -> str:
     """Simulate a match, then ASCII-report hypothesis vs post-match normal-form NE.
 
     The one-shot payoffs for the "final" panel use ``merge_strategy_preferences``
     on a deep copy of the match ``final_state`` (HP, etc.), so the matrix can
     differ from the hypothesis when injuries change counterfactual round utilities.
+
+    Appends a **joint-play vs hypothesis** table: observed counts per cell divided by
+    ``N · Pr(cell)`` under the hypothesis NE (``joint_mixed_index`` selects which mixed
+    equilibrium when several exist; pure NE uses a uniform mixture over listed cells).
 
     Uses a lazy import of ``GameSimulator`` to limit import cycles.
     """
@@ -431,10 +567,39 @@ def report_match_hypothesis_vs_final_nash(
         include_mixed=include_mixed,
     )
     summ = outcome.get("summary", {})
+    margin = float(
+        summ.get("resilience_margin_p1_minus_p2", resilience_margin_p1_minus_p2(final_gs))
+    )
+    leader = str(
+        summ.get("resilience_leader", resilience_leader_p1_seat(final_gs))
+    )
+    leader_txt = {
+        "p1": "P1 ahead on resilience",
+        "p2": "P2 ahead on resilience",
+        "tie": "tied on resilience",
+    }.get(leader, leader)
+    # ``p1_wins`` / ``p2_wins`` are per-round ``score`` labels, not margin “wins”.
     header = (
         f"Match recap: max_rounds={max_rounds}  |  "
-        f"episode wins P1={summ.get('p1_wins')}  P2={summ.get('p2_wins')}"
+        f"resilience margin (P1−P2): {margin:+.1f}  →  {leader_txt}  |  "
+        f"round score tallies: P1={summ.get('p1_wins')}  P2={summ.get('p2_wins')}  "
+        f"TIE={summ.get('ties')}  CRASH={summ.get('crashes')}  |  "
+        f"final HP P1={final_gs.get('p1_hp')}  P2={final_gs.get('p2_hp')}"
     )
+    joint_section = ""
+    try:
+        n_r = len(final_gs.get("p1_action_history") or [])
+        if n_r > 0:
+            counts = empirical_joint_action_counts(final_gs)
+            joint_section = "\n\n" + format_joint_play_vs_hypothesis_ascii(
+                counts,
+                hypothesis,
+                n_rounds=n_r,
+                mixed_index=joint_mixed_index,
+            )
+    except ValueError as exc:
+        joint_section = f"\n\n(joint-frequency table skipped: {exc})"
+
     return "\n".join(
         [
             header,
@@ -445,6 +610,7 @@ def report_match_hypothesis_vs_final_nash(
                 hypothesis_caption="Hypothesis NE (pre-match normal form)",
                 final_caption="Final NE (post-match gamestate → one-shot matrix)",
             ),
+            joint_section,
         ]
     )
 
