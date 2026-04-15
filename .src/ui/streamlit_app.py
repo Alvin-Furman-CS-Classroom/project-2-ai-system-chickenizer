@@ -8,6 +8,8 @@ Run:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import html
+import inspect
 import json
 import os
 import signal
@@ -63,6 +65,50 @@ STRATEGIES: List[StrategyChoice] = [
 ]
 
 
+def _strategy_class_doc(cls: Type[Strategy]) -> str:
+    """Return the class docstring for UI tooltips (matches in-code documentation)."""
+    doc = inspect.getdoc(cls)
+    if doc and doc.strip():
+        return doc.strip()
+    return "No description available."
+
+
+def _html_title_attr(text: str, max_len: int = 1800) -> str:
+    """Escape text for use in an HTML ``title`` / ``abbr`` attribute."""
+    stripped = text.strip()
+    if len(stripped) > max_len:
+        stripped = stripped[: max_len - 1] + "…"
+    return html.escape(stripped, quote=True).replace("\n", "&#10;")
+
+
+def _strategy_doc_hint(choice: StrategyChoice) -> None:
+    """Small hover hint for the strategy currently selected in the adjacent selectbox."""
+    title = _html_title_attr(_strategy_class_doc(choice.cls))
+    st.markdown(
+        f'<p style="font-size:0.78rem;color:#9a9a9a;margin:-0.35rem 0 0.5rem 0;">'
+        f'<abbr title="{title}" style="cursor:help;text-decoration:underline dotted;text-underline-offset:2px;">'
+        "ℹ️ Strategy description (hover)"
+        "</abbr></p>",
+        unsafe_allow_html=True,
+    )
+
+
+def _strategy_reference_expander() -> None:
+    """List every strategy with a native browser tooltip (class docstring)."""
+    with st.expander("All strategies — hover a name for its description", expanded=False):
+        items: List[str] = []
+        for sc in STRATEGIES:
+            t = _html_title_attr(_strategy_class_doc(sc.cls))
+            label = html.escape(sc.label)
+            items.append(
+                f'<li style="margin:0.3rem 0"><abbr title="{t}" style="cursor:help">{label}</abbr></li>'
+            )
+        st.markdown(
+            "<ul style='list-style:none;padding-left:0;margin:0'>" + "".join(items) + "</ul>",
+            unsafe_allow_html=True,
+        )
+
+
 def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, Any]:
     """
     Creates UI for strategy parameters.
@@ -79,14 +125,20 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
 
     # Establish Seed param UI
     if cls is RandomStrategy:
-        seed = st.number_input(
-            f"{label_prefix} seed (optional)",
-            min_value=0,
-            value=0,
-            step=1,
-            key=f"{label_prefix}_random_seed",
-        )
         use_seed = st.checkbox(f"{label_prefix} use seed", value=False, key=f"{label_prefix}_random_use_seed")
+        seed = (
+            int(
+                st.number_input(
+                    f"{label_prefix} seed (optional)",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=f"{label_prefix}_random_seed",
+                )
+            )
+            if use_seed
+            else 0
+        )
         params["seed"] = int(seed) if use_seed else None
 
     # Establish HP Threshold param UI
@@ -519,11 +571,15 @@ def main() -> None:
 
         st.subheader("P1 strategy")
         p1_choice = st.selectbox("P1 strategy", options=STRATEGIES, format_func=lambda c: c.label, index=2, key="p1_strategy_choice")
+        _strategy_doc_hint(p1_choice)
         p1_params = _strategy_params_ui("P1", p1_choice)
 
         st.subheader("P2 strategy")
         p2_choice = st.selectbox("P2 strategy", options=STRATEGIES, format_func=lambda c: c.label, index=2, key="p2_strategy_choice")
+        _strategy_doc_hint(p2_choice)
         p2_params = _strategy_params_ui("P2", p2_choice)
+
+        _strategy_reference_expander()
 
         st.subheader("Player preferences (cares)")
         defaults = GameEngine.DEFAULT_GAMESTATE
@@ -531,15 +587,16 @@ def main() -> None:
         p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
 
         animate_arena = st.checkbox("Enable arena animation", value=True, key="animate_arena")
-        animation_speed = int(
-            st.slider("Animation speed (ms)", min_value=200, max_value=1500, value=700, step=50, key="arena_anim_ms")
-        )
-        return_hold_ms = int(
-            st.slider("Hold at action before reset (ms)", min_value=0, max_value=2500, value=1200, step=100, key="arena_hold_ms")
-        )
-        return_speed_ms = int(
-            st.slider("Return-to-idle speed (ms)", min_value=100, max_value=1200, value=350, step=50, key="arena_return_ms")
-        )
+        if animate_arena:
+            animation_speed = int(
+                st.slider("Animation speed (ms)", min_value=200, max_value=1500, value=700, step=50, key="arena_anim_ms")
+            )
+            return_hold_ms = int(
+                st.slider("Hold at action before reset (ms)", min_value=0, max_value=2500, value=1200, step=100, key="arena_hold_ms")
+            )
+            return_speed_ms = int(
+                st.slider("Return-to-idle speed (ms)", min_value=100, max_value=1200, value=350, step=50, key="arena_return_ms")
+            )
         start_new = st.button("Start New Game", type="primary", use_container_width=True)
         step_disabled = bool(
             st.session_state.get("game_over", False)
