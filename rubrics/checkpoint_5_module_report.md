@@ -8,7 +8,7 @@
 
 ## Summary
 
-Module 5 is functionally complete for end-of-project delivery: it provides normal-form and repeated-play analysis outputs and integrates those into the Streamlit UI. The module is technically strong, and integration-test evidence is now present with multiple runnable cross-module flows under `integration_tests/`.
+Module 5 is functionally complete for end-of-project delivery: it provides normal-form and repeated-play analysis outputs and integrates those into the Streamlit UI. The module is technically strong, integration-test evidence is present with multiple runnable cross-module flows, and UI maintainability improved after splitting major Streamlit sections into dedicated panel/view modules.
 
 ---
 
@@ -16,7 +16,7 @@ Module 5 is functionally complete for end-of-project delivery: it provides norma
 
 ### 1.1 Functionality (8 points)
 
-| Score | 7/8 |
+| Score | 8/8 |
 |-------|-----|
 
 **What Works:**
@@ -28,11 +28,16 @@ Module 5 is functionally complete for end-of-project delivery: it provides norma
 - `.src/nash_normal_form.py`
 - `.src/nash_repeated_analysis.py`
 - `.src/ui/streamlit_app.py`
+- `.src/ui/panel_nash.py`
+- `.src/ui/panel_repeated.py`
+- `.src/ui/panel_qlearning.py`
+- `.src/ui/nash_html.py`
+- `.src/ui/arena_view.py`
 - `unit_tests/test_nash_normal_form.py`
 - `unit_tests/test_nash_repeated_analysis.py`
 
 **Remaining Gap:**
-- Some functionality is tightly coupled to current UI structure, making reuse harder than ideal.
+- Remaining architectural friction is mostly import/layout related (`.src` path and fallback imports), not core module-function coupling.
 
 ---
 
@@ -83,7 +88,7 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 
 ---
 
-### Part 1 Subtotal: 25/27
+### Part 1 Subtotal: 26/27
 
 ---
 
@@ -186,10 +191,10 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 
 | Section | Score | Max | Percentage |
 |---------|-------|-----|------------|
-| Part 1: Source Code | 25 | 27 | 93% |
+| Part 1: Source Code | 26 | 27 | 96% |
 | Part 2: Testing | 15 | 15 | 100% |
 | Part 3: GitHub | 5 | 8 | 63% |
-| **Total** | **45** | **50** | **90%** |
+| **Total** | **46** | **50** | **92%** |
 
 ---
 
@@ -201,7 +206,7 @@ See `checkpoint_5_elegance_report.md` for detailed analysis.
 
 ### Should Fix
 
-- [ ] Refactor `.src/ui/streamlit_app.py` into smaller UI modules for maintainability and clearer ownership boundaries.
+- [x] Refactor `.src/ui/streamlit_app.py` into smaller UI modules for maintainability and clearer ownership boundaries.
 - [ ] Resolve `.src` package layout/import fallback debt and standardize runtime/test imports.
 
 ### Recommended

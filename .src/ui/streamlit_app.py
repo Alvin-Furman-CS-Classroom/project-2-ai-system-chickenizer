@@ -37,20 +37,11 @@ elif str(DOT_SRC) not in sys.path:
     sys.path.insert(0, str(DOT_SRC))
 
 from engine import GameEngine  # type: ignore  # noqa: E402
-from analysis_payloads import (  # type: ignore  # noqa: E402
-    build_one_shot_nash_payload,
-    build_repeated_analysis_payload,
-)
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
-from nash_normal_form import (  # type: ignore  # noqa: E402
-    ACTION_LABELS,
-    RoundNormalFormSnapshot,
-    best_response_correspondences,
-    collect_per_round_normal_forms,
-)
-from nash_repeated_analysis import analyze_repeated_play  # type: ignore  # noqa: E402
-from ql_strategy import QLearningStrategy  # type: ignore  # noqa: E402
-from train_ql import OPPONENT_CHOICES, train_ql_agent  # type: ignore  # noqa: E402
+from ui.arena_view import render_arena as _render_arena_view  # type: ignore  # noqa: E402
+from ui.panel_nash import render_nash_normal_form_panel as _render_nash_panel  # type: ignore  # noqa: E402
+from ui.panel_qlearning import render_qlearning_panel as _render_qlearning_panel  # type: ignore  # noqa: E402
+from ui.panel_repeated import render_repeated_play_panel as _render_repeated_panel  # type: ignore  # noqa: E402
 from strategies import (  # type: ignore  # noqa: E402
     Strategy,
     AlwaysStayStrategy,
@@ -61,7 +52,6 @@ from strategies import (  # type: ignore  # noqa: E402
     AggressiveStrategy,
     DefensiveStrategy,
     MinimaxStrategy,
-    merge_strategy_preferences,
 )
 
 PREFERENCE_KEYS: Tuple[str, ...] = ("round_win", "round_loss", "tie", "crash", "hp_delta")
@@ -291,159 +281,21 @@ def _render_nash_normal_form_panel(
     p1_prefs: Dict[str, int],
     p2_prefs: Dict[str, int],
 ) -> None:
-    """2×2 payoff matrix (resilience) and Nash summary for the current sidebar configuration."""
-    st.subheader("One-shot normal form & Nash")
-    with st.expander("Payoff matrix and equilibria (from sidebar selections)", expanded=False):
-        st.caption(
-            "Each cell is **(P1 resilience, P2 resilience)** after one **simultaneous** counterfactual "
-            "round — **cumulative** values from the **current** baseline (not reset to zero), so they "
-            "track the match. **Before a game starts**, baseline is 0/0; **after rounds**, they use "
-            "the live **match state** when available. Preferences: **engine defaults + implied + cares** "
-            "(sliders override by key). **Pure/mixed Nash** depend on payoff *differences*, so they usually "
-            "match the same game with zero baseline)."
-        )
-        p1s = _build_strategy(p1_choice, "p1", p1_params)
-        p2s = _build_strategy(p2_choice, "p2", p2_params)
-        live_base: Optional[Dict[str, Any]] = None
-        match: Optional[MatchSession] = st.session_state.get("match")
-        if match is not None:
-            live_base = match.engine.get_gamestate()
-        payload = build_one_shot_nash_payload(
-            p1s,
-            p2s,
-            p1_prefs,
-            p2_prefs,
-            live_base_gamestate=live_base,
-            include_mixed=True,
-        )
-        merged = payload.merged_gamestate
-        with st.expander("Effective preference weights (used for Nash payoffs)", expanded=False):
-            st.markdown("**P1** `p1_preferences`")
-            st.json(merged["p1_preferences"])
-            st.markdown("**P2** `p2_preferences`")
-            st.json(merged["p2_preferences"])
-        result = payload.normal_form_result
-        if payload.mixed_skipped:
-            st.caption(
-                "Mixed equilibria skipped; showing pure Nash only. "
-                "Ensure **nashpy** and **numpy** are installed."
-            )
-
-        lab = list(ACTION_LABELS)
-        ne_set = set(result.pure_nash_indices)
-        table_rows: List[Dict[str, Any]] = []
-        for i, a1 in enumerate(lab):
-            row: Dict[str, Any] = {"P1 \\ P2": f"P1 · {a1}"}
-            for j, a2 in enumerate(lab):
-                u1 = result.payoff_p1[i][j]
-                u2 = result.payoff_p2[i][j]
-                cell = f"({u1}, {u2})"
-                if (i, j) in ne_set:
-                    cell += "  [NE]"
-                row[f"P2 · {a2}"] = cell
-            table_rows.append(row)
-        st.dataframe(table_rows, use_container_width=True, hide_index=True)
-
-        br = payload.best_responses
-        st.markdown("**Pure best responses** (row index = Swerve→0, Stay→1)")
-        st.write(
-            {
-                "If P2 plays Swerve, P1 best row(s)": br["p1_best_rows_given_p2_col"][0],
-                "If P2 plays Stay, P1 best row(s)": br["p1_best_rows_given_p2_col"][1],
-                "If P1 plays Swerve, P2 best col(s)": br["p2_best_cols_given_p1_row"][0],
-                "If P1 plays Stay, P2 best col(s)": br["p2_best_cols_given_p1_row"][1],
-            }
-        )
-
-        if result.pure_nash_indices:
-            profiles = [f"P1 {lab[i]} / P2 {lab[j]}" for i, j in result.pure_nash_indices]
-            st.success("Pure-strategy Nash: " + " · ".join(profiles))
-        else:
-            st.info("No pure-strategy Nash equilibrium in this induced normal form.")
-
-        if result.mixed_equilibria:
-            st.markdown("**Mixed Nash** (probabilities over Swerve, then Stay)")
-            for k, (sig, rho) in enumerate(result.mixed_equilibria, 1):
-                st.write(
-                    f"— Profile {k}: P1 σ = {sig}, P2 ρ = {rho}",
-                )
-        else:
-            st.caption("No mixed equilibrium computed (or none found).")
-
-
-def _cell_rgb_welfare_global(u1: int, u2: int, w_min: int, w_max: int) -> str:
-    """CSS background + text color from joint welfare (u1+u2), normalized with **global** min/max."""
-    w = u1 + u2
-    if w_max > w_min:
-        t = (w - w_min) / (w_max - w_min)
-    else:
-        t = 0.5
-    t = max(0.0, min(1.0, t))
-    r = int(240 - t * (240 - 18))
-    g = int(240 - t * (240 - 95))
-    b = int(240 - t * (240 - 42))
-    text = "#111111" if t < 0.45 else "#f8fff8"
-    return f"background: rgb({r},{g},{b}); color: {text};"
-
-
-def _stacked_nash_round_matrices_html(snapshots: List[RoundNormalFormSnapshot]) -> str:
-    """HTML: one 2×2 per round; heatmap uses **global** welfare scale across all rounds."""
-    lab = list(ACTION_LABELS)
-    all_welfare: List[int] = []
-    for snap in snapshots:
-        for i in range(2):
-            for j in range(2):
-                all_welfare.append(snap.payoff_p1[i][j] + snap.payoff_p2[i][j])
-    w_min, w_max = min(all_welfare), max(all_welfare)
-
-    parts: List[str] = [
-        "<style>",
-        ".nash-stack-wrap { font-family: system-ui, Segoe UI, sans-serif; }",
-        ".nash-stack-wrap table { border-collapse: collapse; width: 100%; max-width: 520px; margin: 0 auto 1rem auto; }",
-        ".nash-stack-wrap th, .nash-stack-wrap td { border: 1px solid #555; padding: 10px 14px; text-align: center; }",
-        ".nash-stack-wrap th.hdr { background: #2a2a2a; color: #eee; }",
-        ".nash-stack-wrap th.rowh { background: #222; color: #ddd; font-weight: 600; }",
-        ".nash-stack-wrap .round-title { color: #eee; font-weight: 700; margin: 0.75rem 0 0.35rem 0; font-size: 1.05rem; }",
-        ".nash-stack-wrap .baseline { color: #aaa; font-size: 0.85rem; margin: 0 0 0.5rem 0; }",
-        "</style>",
-        '<div class="nash-stack-wrap">',
-    ]
-    for snap in snapshots:
-        ne_set = set(snap.pure_nash_indices)
-        parts.append(f'<div class="round-title">Round {snap.round_index}</div>')
-        parts.append(
-            f'<div class="baseline">Baseline resilience at round start: '
-            f"P1 = {snap.baseline_p1_resilience}, P2 = {snap.baseline_p2_resilience} "
-            f"(cells show cumulative resilience after that counterfactual joint action)</div>"
-        )
-        parts.append("<table>")
-        parts.append(
-            "<thead><tr><th class='hdr'></th>"
-            f"<th class='hdr'>P2 · {html.escape(lab[0])}</th>"
-            f"<th class='hdr'>P2 · {html.escape(lab[1])}</th></tr></thead><tbody>"
-        )
-        for i, a1 in enumerate(lab):
-            parts.append("<tr>")
-            parts.append(f"<th class='rowh'>P1 · {html.escape(a1)}</th>")
-            for j, a2 in enumerate(lab):
-                u1, u2 = snap.payoff_p1[i][j], snap.payoff_p2[i][j]
-                bg_style = _cell_rgb_welfare_global(u1, u2, w_min, w_max)
-                is_ne = (i, j) in ne_set
-                ne_extra = (
-                    " box-shadow: inset 0 0 0 3px #ffc107; font-weight: 700;"
-                    if is_ne
-                    else ""
-                )
-                cell_inner = f"({u1}, {u2})"
-                if is_ne:
-                    cell_inner += "  ·  NE"
-                parts.append(
-                    f"<td style='{bg_style}{ne_extra}'>{html.escape(cell_inner)}</td>"
-                )
-            parts.append("</tr>")
-        parts.append("</tbody></table>")
-    parts.append("</div>")
-    return "".join(parts)
+    """Delegate one-shot Nash panel rendering to modular UI helper."""
+    match: Optional[MatchSession] = st.session_state.get("match")
+    live_base: Optional[Dict[str, Any]] = None
+    if match is not None:
+        live_base = match.engine.get_gamestate()
+    _render_nash_panel(
+        p1_choice,
+        p2_choice,
+        p1_params,
+        p2_params,
+        p1_prefs,
+        p2_prefs,
+        build_strategy=_build_strategy,
+        live_base_gamestate=live_base,
+    )
 
 
 def _render_repeated_play_panel(
@@ -455,96 +307,17 @@ def _render_repeated_play_panel(
     p2_prefs: Dict[str, int],
     max_rounds: int,
 ) -> None:
-    """Per-round stacked 2×2 matrices plus composite / conditional summaries from the same simulation."""
-    st.subheader("N-round analysis (simulation)")
-    p1s = _build_strategy(p1_choice, "p1", p1_params)
-    p2s = _build_strategy(p2_choice, "p2", p2_params)
-    cap = max(1, int(max_rounds))
-    payload = build_repeated_analysis_payload(
-        p1s,
-        p2s,
+    """Delegate repeated-play panel rendering to modular UI helper."""
+    _render_repeated_panel(
+        p1_choice,
+        p2_choice,
+        p1_params,
+        p2_params,
         p1_prefs,
         p2_prefs,
-        max_rounds=cap,
-        base_gamestate=None,
+        max_rounds,
+        build_strategy=_build_strategy,
     )
-    merged = payload.merged_gamestate
-
-    with st.expander("Per-round 2×2 normal forms (at round start)", expanded=True):
-        st.caption(
-            "Runs a **fresh** match in the engine with your sidebar strategies, up to **max rounds** "
-            "(or until HP / resilience tap-out). **Before** each round’s actions, we build the same **one-shot** "
-            "2×2 matrix (resilience payoffs if both sides chose Swerve/Stay that round). "
-            "Each matrix uses **cares + implied preferences** (same merge as the live match). "
-            "Cell values are **cumulative resilience after** that joint action from the **round-start** "
-            "baseline (so totals rise/fall as the simulated match progresses). "
-            "**Heatmap color** uses one **global** scale across *all* stacked rounds (min→max joint welfare "
-            "over every cell), so later rounds can look darker/lighter than early ones — not just a "
-            "per-round comparison. **NE** = pure Nash in that matrix (gold outline)."
-        )
-        with st.expander("Effective preference weights (used for each round’s payoffs)", expanded=False):
-            st.markdown("**P1** `p1_preferences`")
-            st.json(merged["p1_preferences"])
-            st.markdown("**P2** `p2_preferences`")
-            st.json(merged["p2_preferences"])
-
-        snaps = payload.per_round_normal_forms
-        if not snaps:
-            st.warning("No rounds captured — game ended before the first round (check game state).")
-        else:
-            st.markdown(_stacked_nash_round_matrices_html(snaps), unsafe_allow_html=True)
-            st.caption(f"Showing **{len(snaps)}** round(s) (stopped early if the match ended).")
-
-    with st.expander("Composite & conditional statistics (same strategies and cap)", expanded=False):
-        st.caption(
-            "Uses the **same** merged preferences and a **full** `run_game` simulation (not the per-round "
-            "matrix snapshots above). **Composite** = how often each joint action occurs and mean **per-round** "
-            "Δ resilience by cell. **Conditional** = mean next-round Δ resilience given the **previous** round’s "
-            "joint action (Markov-style, comparable to Q-table transitions). This is **descriptive**, not a Nash "
-            "equilibrium of the repeated game."
-        )
-        rp = payload.repeated_play_result
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Rounds simulated", rp.rounds_played)
-        c2.metric("Cap (max rounds)", rp.max_rounds)
-        c3.metric("End reason", rp.match_end_reason or "—")
-
-        if not rp.records:
-            st.info("No rounds completed — nothing to aggregate.")
-            return
-
-        st.markdown("**Cumulative resilience**")
-        st.line_chart(rp.cumulative_chart_rows(), x="round", y=["p1_cum_resilience", "p2_cum_resilience"])
-
-        st.markdown("**Per-round Δ resilience**")
-        st.line_chart(rp.per_round_delta_rows(), x="round", y=["delta_p1", "delta_p2"])
-
-        st.markdown("**Joint action → mean per-round Δ(R1), Δ(R2)** (count *n* in cell)")
-        st.dataframe(rp.joint_matrix_rows(), use_container_width=True, hide_index=True)
-
-        st.markdown("**Previous joint action → mean *next* round Δ(R1), Δ(R2)**")
-        cond = rp.conditional_rows()
-        if cond:
-            st.dataframe(cond, use_container_width=True, hide_index=True)
-        else:
-            st.caption("Need at least two rounds for conditional stats.")
-
-        with st.popover("Round-by-round detail"):
-            st.dataframe(
-                [
-                    {
-                        "round": r.round_number,
-                        "P1": r.p1_action,
-                        "P2": r.p2_action,
-                        "outcome": r.outcome,
-                        "ΔR1": r.delta_p1_resilience,
-                        "ΔR2": r.delta_p2_resilience,
-                    }
-                    for r in rp.records
-                ],
-                use_container_width=True,
-                hide_index=True,
-            )
 
 
 def _render_match_state(engine: GameEngine, p1_strategy: Strategy, p2_strategy: Strategy, last_round: Dict[str, Any]) -> None:
@@ -607,142 +380,15 @@ def _render_arena(
     return_ms: int = 350,
     action_nonce: int = 0,
 ) -> None:
-    """Render a simple HTML/CSS animated arena scene."""
-    p1_action = last_round.get("p1_action")
-    p2_action = last_round.get("p2_action")
-    outcome = (last_round.get("outcome") or "").upper()
-
-    nonce_suffix = str(action_nonce)
-
-    flash_class = "flash-crash" if outcome == "CRASH" else ""
-    outcome_text = "No completed rounds yet" if not outcome else outcome
-    if game_over:
-        outcome_text = f"{outcome_text} - GAME OVER"
-    delay_ms = duration_ms + hold_ms
-    p1_vec = "stay"
-    p2_vec = "stay"
-    if p1_action == "swerve":
-        p1_vec = "swerve"
-    if p2_action == "swerve":
-        p2_vec = "swerve"
-    if outcome == "CRASH":
-        p1_vec = "crash"
-        p2_vec = "crash"
-
-    arena_html = f"""
-    <style>
-      .arena {{
-        position: relative;
-        width: 100%;
-        height: 240px;
-        border-radius: 10px;
-        overflow: hidden;
-        border: 1px solid #444;
-        background:
-          linear-gradient(to bottom, #111 0%, #111 48%, #333 48%, #333 52%, #111 52%, #111 100%);
-      }}
-      .car {{
-        position: absolute;
-        top: 64px;
-        font-size: 64px;
-      }}
-      .p1 {{ left: 8%; transform: translate(0px, 0px) scaleX(-1); }}
-      .p2 {{ right: 8%; transform: translate(0px, 0px); }}
-      .outcome {{
-        position: absolute;
-        left: 50%;
-        top: 8px;
-        z-index: 2;
-        transform: translateX(-50%);
-        font-weight: 700;
-        font-size: 14px;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        color: #f5f5f5;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-        background: rgba(0, 0, 0, 0.75);
-        border: 1px solid #888;
-        border-radius: 999px;
-        padding: 6px 14px;
-        white-space: nowrap;
-      }}
-      .flash {{
-        position: absolute;
-        left: 50%;
-        top: 68px;
-        transform: translateX(-50%);
-        font-size: 44px;
-        opacity: 0;
-      }}
-      .flash-crash {{
-        animation: boom {duration_ms}ms ease-in-out 1;
-      }}
-      @keyframes boom {{
-        0% {{ opacity: 0; transform: translateX(-50%) scale(0.2); }}
-        40% {{ opacity: 1; transform: translateX(-50%) scale(1.1); }}
-        100% {{ opacity: 0; transform: translateX(-50%) scale(1.5); }}
-      }}
-    </style>
-
-    <div class="arena arena-{action_nonce}" id="arena-{nonce_suffix}">
-      <div class="outcome">{outcome_text}</div>
-      <div class="car p1" id="p1-{nonce_suffix}">🚗</div>
-      <div class="car p2" id="p2-{nonce_suffix}">🏎️</div>
-      <div class="flash {flash_class}">💥</div>
-    </div>
-    <script>
-      (() => {{
-        const p1 = document.getElementById("p1-{nonce_suffix}");
-        const p2 = document.getElementById("p2-{nonce_suffix}");
-        const arena = document.getElementById("arena-{nonce_suffix}");
-        if (!p1 || !p2 || !arena) return;
-
-        const arenaW = arena.clientWidth;
-        const travel = Math.min(arenaW * 0.42, 420);
-        const crash = Math.min(arenaW * 0.28, 260);
-        const swingY = 34;
-        const p1SwerveY = -swingY;
-        const p2SwerveY = Math.round(swingY * 1.45);
-
-        const p1Action = "{p1_vec}";
-        const p2Action = "{p2_vec}";
-        const d1 = p1Action === "crash" ? crash : travel;
-        const d2 = p2Action === "crash" ? -crash : -travel;
-        const y1 = p1Action === "swerve" ? p1SwerveY : 0;
-        const y2 = p2Action === "swerve" ? p2SwerveY : 0;
-        const r1 = p1Action === "swerve" ? -12 : (p1Action === "crash" ? -7 : 0);
-        const r2 = p2Action === "swerve" ? -12 : (p2Action === "crash" ? 7 : 0);
-
-        const p1End = `translate(${{d1}}px, ${{y1}}px) rotate(${{r1}}deg) scaleX(-1)`;
-        const p2End = `translate(${{d2}}px, ${{y2}}px) rotate(${{r2}}deg)`;
-        const p1Idle = "translate(0px, 0px) scaleX(-1)";
-        const p2Idle = "translate(0px, 0px)";
-
-        p1.animate([{{ transform: p1Idle }}, {{ transform: p1End }}], {{
-          duration: {duration_ms},
-          easing: "ease-in-out",
-          fill: "forwards"
-        }});
-        p2.animate([{{ transform: p2Idle }}, {{ transform: p2End }}], {{
-          duration: {duration_ms},
-          easing: "ease-in-out",
-          fill: "forwards"
-        }});
-        setTimeout(() => {{
-          p1.animate([{{ transform: p1End }}, {{ transform: p1Idle }}], {{
-            duration: {return_ms},
-            easing: "ease-in-out",
-            fill: "forwards"
-          }});
-          p2.animate([{{ transform: p2End }}, {{ transform: p2Idle }}], {{
-            duration: {return_ms},
-            easing: "ease-in-out",
-            fill: "forwards"
-          }});
-        }}, {delay_ms});
-      }})();
-    </script>
-    """
-    components.html(arena_html, height=260)
+    """Delegate arena rendering to modular HTML/CSS helper."""
+    _render_arena_view(
+        last_round=last_round,
+        game_over=game_over,
+        duration_ms=duration_ms,
+        hold_ms=hold_ms,
+        return_ms=return_ms,
+        action_nonce=action_nonce,
+    )
 
 
 def _close_ui() -> None:
@@ -771,23 +417,6 @@ def _close_ui() -> None:
     time.sleep(0.7)
     os.kill(os.getpid(), signal.SIGTERM)
     st.stop()
-
-
-def render_learned_q_table(agent: QLearningStrategy) -> None:
-    """Plug-in for Streamlit: show the tabular policy after ``train_ql_agent`` (or any training)."""
-    st.subheader("Learned Q-table (RL)")
-    st.caption(
-        "Each row is a visited state. **q_swerve** / **q_stay** are Q(s, swerve) and Q(s, stay) "
-        "(bool actions False / True)."
-    )
-    st.dataframe(agent.q_table_records(), use_container_width=True, hide_index=True)
-    st.download_button(
-        label="Download Q-table JSON",
-        data=json.dumps(agent.q_table_payload(), indent=2),
-        file_name="q_table_payload.json",
-        mime="application/json",
-        key="download_q_table_json",
-    )
 
 
 def main() -> None:
@@ -905,37 +534,7 @@ def main() -> None:
         st.line_chart(rows, x="round", y=["p1_hp", "p2_hp"])
         st.line_chart(rows, x="round", y=["p1_resilience", "p2_resilience", "resilience_diff"])
 
-    with st.expander("Q-learning: train & inspect Q-table", expanded=False):
-        st.markdown(
-            "Train a tabular Q-agent offline and inspect **Q(s,·)**. In code, use "
-            "`agent.q_table_records()` for a list of rows, or `agent.q_table_payload()` for JSON."
-        )
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            ql_episodes = st.number_input(
-                "Episodes", min_value=5, max_value=2000, value=80, step=5, key="ql_episodes"
-            )
-        with c2:
-            ql_max_rounds = st.number_input(
-                "Max rounds / game", min_value=3, max_value=30, value=12, key="ql_max_rounds"
-            )
-        with c3:
-            ql_seed = st.number_input("Agent seed", min_value=0, value=0, key="ql_seed")
-        ql_opp = st.selectbox("Opponent", options=OPPONENT_CHOICES, index=0, key="ql_opponent")
-        if st.button("Run Q-learning training", key="ql_train_btn"):
-            demo = QLearningStrategy("p1", seed=int(ql_seed))
-            with st.spinner("Training…"):
-                train_ql_agent(
-                    demo,
-                    opponent=ql_opp,
-                    episodes=int(ql_episodes),
-                    max_rounds=int(ql_max_rounds),
-                    epsilon_start=0.25,
-                    epsilon_end=0.05,
-                )
-            st.session_state["ql_demo_agent"] = demo
-        if st.session_state.get("ql_demo_agent") is not None:
-            render_learned_q_table(st.session_state["ql_demo_agent"])
+    _render_qlearning_panel()
 
 
 if __name__ == "__main__":

@@ -2,13 +2,13 @@
 
 **Date**: April 14, 2026  
 **Module**: Module 5 (Analysis techniques, visualization)  
-**Files Reviewed**: `.src/nash_normal_form.py`, `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`, `.src/ui/streamlit_app.py`, `bootstrap_dot_src.py`
+**Files Reviewed**: `.src/nash_normal_form.py`, `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`, `.src/ui/streamlit_app.py`, `.src/ui/panel_nash.py`, `.src/ui/panel_repeated.py`, `.src/ui/panel_qlearning.py`, `.src/ui/nash_html.py`, `.src/ui/arena_view.py`, `bootstrap_dot_src.py`
 
 ---
 
 ## Summary
 
-Final-stage code quality is strong overall: the analysis modules are well-structured, heavily documented, and backed by targeted tests. Recent refactors improved UI reusability by extracting analysis payload building into `.src/analysis_payloads.py` and encapsulating live match state/stepping into `.src/match_session.py`. The main elegance drag remains architectural consistency (notably `.src` import workarounds) plus some large UI sections that would benefit from further decomposition.
+Final-stage code quality is strong overall: the analysis modules are well-structured, heavily documented, and backed by targeted tests. Recent refactors substantially improved UI reusability by extracting analysis payload builders, match session orchestration, and major Streamlit panels/HTML renderers into dedicated modules under `.src/ui/`. The main elegance drag now is mostly architectural consistency (`.src` import workarounds) rather than monolithic UI logic.
 
 ---
 
@@ -28,25 +28,25 @@ Final-stage code quality is strong overall: the analysis modules are well-struct
 
 ### 2. Function and Method Design
 
-| Score | 3/4 |
+| Score | 4/4 |
 
 **Strengths:**
 - Analysis code is decomposed into focused helpers (`_history_to_records`, `_aggregate_joint`, `_aggregate_conditional`)
 - Dataclasses cleanly separate raw simulation data from formatting helpers
 
 **Issues:**
-- `streamlit_app.py` is still a very large file; while payload building and match stepping were extracted, a lot of rendering/formatting logic remains in one module
-- Some formatting functions include many optional flags and can be hard to parse mentally in one pass
+- `streamlit_app.py` still acts as orchestration glue and remains moderately large, but core heavy sections were extracted into panel/view modules
 
 ---
 
 ### 3. Abstraction and Modularity
 
-| Score | 3/4 |
+| Score | 4/4 |
 
 **Strengths:**
 - Good layering between simulation (`engine`), strategy (`strategies`), and analysis modules
 - Dataclass-centric outputs provide stable interfaces for UI and serialization
+- UI is now split into focused modules (`panel_nash`, `panel_repeated`, `panel_qlearning`, `nash_html`, `arena_view`) with clearer boundaries
 
 **Issues:**
 - Persistent fallback import pattern (`try: from .x ... except ImportError: from x ...`) indicates unresolved package structure friction
@@ -119,16 +119,16 @@ Final-stage code quality is strong overall: the analysis modules are well-struct
 | Criterion | Score |
 |-----------|-------|
 | Naming Conventions | 4 |
-| Function Design | 3 |
-| Abstraction & Modularity | 3 |
+| Function Design | 4 |
+| Abstraction & Modularity | 4 |
 | Style Consistency | 4 |
 | Code Hygiene | 3 |
 | Control Flow Clarity | 4 |
 | Pythonic Idioms | 4 |
 | Error Handling | 3 |
-| **Average** | **3.5** |
+| **Average** | **3.75** |
 
-**Module Rubric Score Mapping**: 3.5 average -> **6/7** (Strong, near-exceeds expectations)
+**Module Rubric Score Mapping**: 3.75 average -> **7/7** (Exceeds expectations)
 
 ---
 
@@ -136,11 +136,10 @@ Final-stage code quality is strong overall: the analysis modules are well-struct
 
 ### High Priority
 1. Normalize package layout (`src/`) and remove import fallback branches across modules/tests.
-2. Split major UI sections in `.src/ui/streamlit_app.py` into smaller rendering helpers/modules.
 
 ### Medium Priority
-3. Consolidate shared formatting/report utilities used by both terminal and Streamlit surfaces.
-4. Reduce test bootstrap repetition for `sys.path` injection once package layout is fixed.
+2. Consolidate shared formatting/report utilities used by both terminal and Streamlit surfaces.
+3. Reduce remaining test bootstrap repetition once package layout is fixed.
 
 ### Low Priority
-5. Add a lightweight style/lint automation target for final polish consistency.
+4. Add a lightweight style/lint automation target for final polish consistency.
