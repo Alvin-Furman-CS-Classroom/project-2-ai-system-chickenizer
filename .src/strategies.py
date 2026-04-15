@@ -185,9 +185,8 @@ class TitForTatStrategy(Strategy):
 class RandomStrategy(Strategy):
     """Strategy that randomly chooses to stay or swerve.
     
-    Note: This requires random module. For deterministic behavior, use
-    a seeded random number generator.
-    """
+    Can be passed a seed for more deterministic behavior. If no seed is provided,
+    a module-level random number generator is used."""
     
     def __init__(self, player: str, seed: Optional[int] = None):
         """Initialize random strategy.

@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-_SRC = Path(__file__).resolve().parent.parent / ".src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+from bootstrap_dot_src import add_dot_src_to_path
+
+add_dot_src_to_path()
 
 import nash_normal_form as nash_nf  # noqa: E402
 from engine import GameEngine  # noqa: E402
@@ -311,3 +311,25 @@ class TestMergeStrategyPreferences:
         )
         assert merged["p1_preferences"].get("hp_delta") == 1
         assert merged["p2_preferences"].get("hp_delta") == 1
+
+
+class TestPerRoundNormalForms:
+    def test_first_snapshot_matches_at_merged_state(self):
+        p1 = AlwaysStayStrategy("p1")
+        p2 = AlwaysSwerveStrategy("p2")
+        base = GameEngine().get_gamestate()
+        merged = merge_strategy_preferences(base, p1, p2)
+        snaps = nash_nf.collect_per_round_normal_forms(p1, p2, merged, max_rounds=1)
+        assert len(snaps) == 1
+        b1, b2 = nash_nf.build_payoff_matrices_at_merged_state(merged)
+        assert snaps[0].payoff_p1 == b1
+        assert snaps[0].payoff_p2 == b2
+
+    def test_three_rounds_three_matrices(self):
+        p1 = AlwaysStayStrategy("p1")
+        p2 = AlwaysSwerveStrategy("p2")
+        base = GameEngine().get_gamestate()
+        merged = merge_strategy_preferences(base, p1, p2)
+        snaps = nash_nf.collect_per_round_normal_forms(p1, p2, merged, max_rounds=3)
+        assert len(snaps) == 3
+        assert [s.round_index for s in snaps] == [1, 2, 3]
