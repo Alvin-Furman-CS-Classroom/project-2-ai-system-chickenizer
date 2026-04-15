@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from copy import deepcopy
-from pathlib import Path
+from bootstrap_dot_src import add_dot_src_to_path
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+add_dot_src_to_path()
 
 from engine import GameEngine  # noqa: E402
 from nash_repeated_analysis import analyze_repeated_play  # noqa: E402

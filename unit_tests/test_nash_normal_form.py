@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-_SRC = Path(__file__).resolve().parent.parent / ".src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+from bootstrap_dot_src import add_dot_src_to_path
+
+add_dot_src_to_path()
 
 import nash_normal_form as nash_nf  # noqa: E402
 from engine import GameEngine  # noqa: E402

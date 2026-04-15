@@ -7,13 +7,9 @@ resilience values match the matrix cell.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from bootstrap_dot_src import add_dot_src_to_path
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+add_dot_src_to_path()
 
 from engine import GameEngine  # noqa: E402
 from nash_normal_form import build_payoff_matrices_at_merged_state  # noqa: E402

@@ -8,6 +8,7 @@ Run:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 import html
 import inspect
 import json
@@ -24,15 +25,26 @@ import streamlit.components.v1 as components
 
 
 # Ensure the repo's ".src" directory is importable when Streamlit executes this file.
+try:
+    from bootstrap_dot_src import add_dot_src_to_path  # type: ignore
+except Exception:  # pragma: no cover - streamlit sometimes runs with odd CWD
+    add_dot_src_to_path = None  # type: ignore
+
 DOT_SRC = Path(__file__).resolve().parents[1]
-if str(DOT_SRC) not in sys.path:
+if add_dot_src_to_path is not None:
+    add_dot_src_to_path(root=DOT_SRC.parent)
+elif str(DOT_SRC) not in sys.path:
     sys.path.insert(0, str(DOT_SRC))
 
 from engine import GameEngine  # type: ignore  # noqa: E402
+from analysis_payloads import (  # type: ignore  # noqa: E402
+    build_one_shot_nash_payload,
+    build_repeated_analysis_payload,
+)
+from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
 from nash_normal_form import (  # type: ignore  # noqa: E402
     ACTION_LABELS,
     RoundNormalFormSnapshot,
-    analyze_normal_form,
     best_response_correspondences,
     collect_per_round_normal_forms,
 )
@@ -185,29 +197,6 @@ def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
     return prefs
 
 
-def _merge_gamestate_with_strategy_and_cares(
-    p1_strategy: Strategy,
-    p2_strategy: Strategy,
-    p1_prefs: Dict[str, int],
-    p2_prefs: Dict[str, int],
-    base_gamestate: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Engine defaults (or ``base_gamestate``) + implied preferences, then **cares** override by key.
-
-    Resilience in the engine (and thus every Nash 2×2 cell) uses ``p1_preferences`` /
-    ``p2_preferences``. Sliders are merged **on top of** implied weights so both affect
-    payoffs unless you override a key in the sidebar.
-
-    When ``base_gamestate`` is the **live** match snapshot, counterfactual payoffs
-    include current cumulative resilience as baseline.
-    """
-    base = GameEngine().get_gamestate() if base_gamestate is None else base_gamestate
-    enriched = merge_strategy_preferences(base, p1_strategy, p2_strategy)
-    enriched["p1_preferences"] = {**enriched["p1_preferences"], **dict(p1_prefs)}
-    enriched["p2_preferences"] = {**enriched["p2_preferences"], **dict(p2_prefs)}
-    return enriched
-
-
 def _build_strategy(choice: StrategyChoice, player: str, params: Dict[str, Any]) -> Strategy:
     """Builds a strategy from a choice and parameters.
     Args:
@@ -240,72 +229,21 @@ def _init_match(
     """
     p1_strategy = _build_strategy(p1_choice, "p1", p1_params)
     p2_strategy = _build_strategy(p2_choice, "p2", p2_params)
-
-    enriched = _merge_gamestate_with_strategy_and_cares(p1_strategy, p2_strategy, p1_prefs, p2_prefs)
-
-    engine = GameEngine(gamestate=enriched)
-    st.session_state["engine"] = engine
-    st.session_state["p1_strategy"] = p1_strategy
-    st.session_state["p2_strategy"] = p2_strategy
-    st.session_state["max_rounds"] = max_rounds
-    st.session_state["game_over"] = False
-    st.session_state["game_over_reason"] = None
-    st.session_state["last_round"] = {"p1_action": None, "p2_action": None, "outcome": None}
-    st.session_state["initialized"] = True
-    st.session_state["shutdown_requested"] = False
-    # for use in animation, to allow repeat actions to be animated properly
-    st.session_state["arena_action_nonce"] = 0
+    st.session_state["match"] = init_match_session(
+        p1_strategy=p1_strategy,
+        p2_strategy=p2_strategy,
+        p1_cares=p1_prefs,
+        p2_cares=p2_prefs,
+        max_rounds=max_rounds,
+    )
 
 
 def _advance_one_round() -> None:
     """Advances the match by one round."""
-    if not st.session_state.get("initialized"):
+    match: Optional[MatchSession] = st.session_state.get("match")
+    if match is None:
         return
-    if st.session_state.get("game_over"):
-        return
-
-    engine: GameEngine = st.session_state["engine"]
-    p1_strategy: Strategy = st.session_state["p1_strategy"]
-    p2_strategy: Strategy = st.session_state["p2_strategy"]
-    max_rounds = int(st.session_state["max_rounds"])
-
-    # max round cond
-    if engine.get_gamestate().get("round", 0) >= max_rounds:
-        st.session_state["game_over"] = True
-        st.session_state["game_over_reason"] = "max_rounds_reached"
-        return
-
-    current = engine.generate_gamestate(increment_round=False)
-    p1_action = p1_strategy(current)
-    engine.play_action("p1", p1_action)
-
-    current = engine.generate_gamestate(increment_round=False)
-    p2_action = p2_strategy(current)
-    engine.play_action("p2", p2_action)
-
-    end_state = engine.generate_gamestate(increment_round=True)
-    score = end_state.get("score", [])
-    outcome = score[-1] if score else None
-    # update round state
-    st.session_state["last_round"] = {
-        "p1_action": "stay" if p1_action else "swerve",
-        "p2_action": "stay" if p2_action else "swerve",
-        "outcome": outcome,
-    }
-    st.session_state["arena_action_nonce"] = int(st.session_state.get("arena_action_nonce", 0)) + 1
-
-    # game over cond
-    is_over, reason = engine.is_game_over()
-    if is_over:
-        st.session_state["game_over"] = True
-        st.session_state["game_over_reason"] = reason
-        return
-
-    # max round cond
-    if end_state.get("round", 0) >= max_rounds:
-        st.session_state["game_over"] = True
-        st.session_state["game_over_reason"] = "max_rounds_reached"
-        return
+    st.session_state["match"] = advance_one_round(match)
 
 def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
     """Creates a list of round rows for the match history interface.
@@ -367,22 +305,25 @@ def _render_nash_normal_form_panel(
         p1s = _build_strategy(p1_choice, "p1", p1_params)
         p2s = _build_strategy(p2_choice, "p2", p2_params)
         live_base: Optional[Dict[str, Any]] = None
-        if st.session_state.get("initialized"):
-            eng = st.session_state.get("engine")
-            if eng is not None:
-                live_base = eng.get_gamestate()
-        merged = _merge_gamestate_with_strategy_and_cares(
-            p1s, p2s, p1_prefs, p2_prefs, base_gamestate=live_base
+        match: Optional[MatchSession] = st.session_state.get("match")
+        if match is not None:
+            live_base = match.engine.get_gamestate()
+        payload = build_one_shot_nash_payload(
+            p1s,
+            p2s,
+            p1_prefs,
+            p2_prefs,
+            live_base_gamestate=live_base,
+            include_mixed=True,
         )
+        merged = payload.merged_gamestate
         with st.expander("Effective preference weights (used for Nash payoffs)", expanded=False):
             st.markdown("**P1** `p1_preferences`")
             st.json(merged["p1_preferences"])
             st.markdown("**P2** `p2_preferences`")
             st.json(merged["p2_preferences"])
-        try:
-            result = analyze_normal_form(p1s, p2s, merged, include_mixed=True)
-        except Exception:  # noqa: BLE001 — nashpy/numpy edge cases
-            result = analyze_normal_form(p1s, p2s, merged, include_mixed=False)
+        result = payload.normal_form_result
+        if payload.mixed_skipped:
             st.caption(
                 "Mixed equilibria skipped; showing pure Nash only. "
                 "Ensure **nashpy** and **numpy** are installed."
@@ -403,7 +344,7 @@ def _render_nash_normal_form_panel(
             table_rows.append(row)
         st.dataframe(table_rows, use_container_width=True, hide_index=True)
 
-        br = best_response_correspondences(result.payoff_p1, result.payoff_p2)
+        br = payload.best_responses
         st.markdown("**Pure best responses** (row index = Swerve→0, Stay→1)")
         st.write(
             {
@@ -518,8 +459,16 @@ def _render_repeated_play_panel(
     st.subheader("N-round analysis (simulation)")
     p1s = _build_strategy(p1_choice, "p1", p1_params)
     p2s = _build_strategy(p2_choice, "p2", p2_params)
-    merged = _merge_gamestate_with_strategy_and_cares(p1s, p2s, p1_prefs, p2_prefs)
     cap = max(1, int(max_rounds))
+    payload = build_repeated_analysis_payload(
+        p1s,
+        p2s,
+        p1_prefs,
+        p2_prefs,
+        max_rounds=cap,
+        base_gamestate=None,
+    )
+    merged = payload.merged_gamestate
 
     with st.expander("Per-round 2×2 normal forms (at round start)", expanded=True):
         st.caption(
@@ -539,7 +488,7 @@ def _render_repeated_play_panel(
             st.markdown("**P2** `p2_preferences`")
             st.json(merged["p2_preferences"])
 
-        snaps = collect_per_round_normal_forms(p1s, p2s, merged, max_rounds=cap)
+        snaps = payload.per_round_normal_forms
         if not snaps:
             st.warning("No rounds captured — game ended before the first round (check game state).")
         else:
@@ -554,7 +503,7 @@ def _render_repeated_play_panel(
             "joint action (Markov-style, comparable to Q-table transitions). This is **descriptive**, not a Nash "
             "equilibrium of the repeated game."
         )
-        rp = analyze_repeated_play(p1s, p2s, merged, max_rounds=cap)
+        rp = payload.repeated_play_result
         c1, c2, c3 = st.columns(3)
         c1.metric("Rounds simulated", rp.rounds_played)
         c2.metric("Cap (max rounds)", rp.max_rounds)
@@ -879,9 +828,9 @@ def main() -> None:
                 st.slider("Return-to-idle speed (ms)", min_value=100, max_value=1200, value=350, step=50, key="arena_return_ms")
             )
         start_new = st.button("Start New Game", type="primary", use_container_width=True)
+        match: Optional[MatchSession] = st.session_state.get("match")
         step_disabled = bool(
-            st.session_state.get("game_over", False)
-            or not st.session_state.get("initialized", False)
+            match is None or bool(match.game_over)
         )
         step_once = st.button("Play Next Round", use_container_width=True, disabled=step_disabled)
 
@@ -895,31 +844,33 @@ def main() -> None:
         )
         shutdown_now = st.button("Shutdown App", type="secondary", use_container_width=True)
         if shutdown_now and allow_shutdown:
-            st.session_state["shutdown_requested"] = True
+            if match is not None:
+                st.session_state["match"] = replace(match, shutdown_requested=True)
             _close_ui()
         elif shutdown_now and not allow_shutdown:
             st.error("Please click the checkbox to confirm you're done playing.")
 
-    if start_new or not st.session_state.get("initialized"):
+    if start_new or st.session_state.get("match") is None:
         _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
 
     if step_once:
         _advance_one_round()
 
-    engine: GameEngine = st.session_state["engine"]
-    p1_strategy: Strategy = st.session_state["p1_strategy"]
-    p2_strategy: Strategy = st.session_state["p2_strategy"]
-    last_round = st.session_state["last_round"]
+    match2: MatchSession = st.session_state["match"]
+    engine: GameEngine = match2.engine
+    p1_strategy: Strategy = match2.p1_strategy
+    p2_strategy: Strategy = match2.p2_strategy
+    last_round = match2.last_round
 
     _render_match_state(engine, p1_strategy, p2_strategy, last_round)
     if animate_arena:
         _render_arena(
             last_round=last_round,
-            game_over=bool(st.session_state.get("game_over", False)),
+            game_over=bool(match2.game_over),
             duration_ms=animation_speed,
             hold_ms=return_hold_ms,
             return_ms=return_speed_ms,
-            action_nonce=int(st.session_state.get("arena_action_nonce", 0)),
+            action_nonce=int(match2.arena_action_nonce),
         )
 
     _render_nash_normal_form_panel(
@@ -941,8 +892,8 @@ def main() -> None:
         max_rounds,
     )
 
-    if st.session_state.get("game_over"):
-        st.warning(f"Game over: `{st.session_state.get('game_over_reason')}`")
+    if match2.game_over:
+        st.warning(f"Game over: `{match2.game_over_reason}`")
     else:
         st.info("Press **Play Next Round** to continue.")
 

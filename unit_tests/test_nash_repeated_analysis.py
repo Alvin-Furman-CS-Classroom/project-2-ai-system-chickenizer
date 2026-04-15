@@ -5,10 +5,9 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+from bootstrap_dot_src import add_dot_src_to_path
+
+add_dot_src_to_path()
 
 from engine import GameEngine  # noqa: E402
 from nash_repeated_analysis import analyze_repeated_play  # noqa: E402

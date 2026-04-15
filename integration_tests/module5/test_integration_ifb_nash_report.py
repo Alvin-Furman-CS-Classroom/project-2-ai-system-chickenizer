@@ -6,14 +6,9 @@ and Module 5 normal-form comparison reporting.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from bootstrap_dot_src import add_dot_src_to_path
 
-# Match existing test import setup for `.src`.
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+add_dot_src_to_path()
 
 from nash_normal_form import report_match_hypothesis_vs_final_nash  # noqa: E402
 from strategies import AggressiveStrategy, DefensiveStrategy  # noqa: E402

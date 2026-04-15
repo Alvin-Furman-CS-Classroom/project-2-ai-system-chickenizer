@@ -6,13 +6,9 @@ pipelines execute and return correctly-shaped summaries under fixed seeds.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from bootstrap_dot_src import add_dot_src_to_path
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+add_dot_src_to_path()
 
 from ql_strategy import QLearningStrategy  # noqa: E402
 from ql_tournament import run_full_tournament  # noqa: E402

@@ -6,16 +6,11 @@ run the engine loop, and compute repeated-play analytics end-to-end.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import sympy as sp
 
-# Match unit-test import pattern: add `.src` to path.
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / ".src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+from bootstrap_dot_src import add_dot_src_to_path
+
+add_dot_src_to_path()
 
 from engine import GameEngine  # noqa: E402
 from module1_kb import ChickenKB  # noqa: E402

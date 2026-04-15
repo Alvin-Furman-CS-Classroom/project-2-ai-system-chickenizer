@@ -2,13 +2,13 @@
 
 **Date**: April 14, 2026  
 **Module**: Module 5 (Analysis techniques, visualization)  
-**Files Reviewed**: `.src/nash_normal_form.py`, `.src/nash_repeated_analysis.py`, `.src/ui/streamlit_app.py`, `unit_tests/test_nash_normal_form.py`, `unit_tests/test_nash_repeated_analysis.py`
+**Files Reviewed**: `.src/nash_normal_form.py`, `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`, `.src/ui/streamlit_app.py`, `bootstrap_dot_src.py`
 
 ---
 
 ## Summary
 
-Final-stage code quality is strong overall: the analysis modules are well-structured, heavily documented, and backed by targeted tests. The main elegance drag remains architectural consistency (notably `.src` import workarounds) plus some large UI functions that would benefit from further decomposition.
+Final-stage code quality is strong overall: the analysis modules are well-structured, heavily documented, and backed by targeted tests. Recent refactors improved UI reusability by extracting analysis payload building into `.src/analysis_payloads.py` and encapsulating live match state/stepping into `.src/match_session.py`. The main elegance drag remains architectural consistency (notably `.src` import workarounds) plus some large UI sections that would benefit from further decomposition.
 
 ---
 
@@ -35,7 +35,7 @@ Final-stage code quality is strong overall: the analysis modules are well-struct
 - Dataclasses cleanly separate raw simulation data from formatting helpers
 
 **Issues:**
-- `streamlit_app.py` is still a very large file with long UI sections and mixed responsibilities
+- `streamlit_app.py` is still a very large file; while payload building and match stepping were extracted, a lot of rendering/formatting logic remains in one module
 - Some formatting functions include many optional flags and can be hard to parse mentally in one pass
 
 ---
