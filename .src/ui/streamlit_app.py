@@ -43,6 +43,8 @@ from ui.panel_hypothesis_final import (  # type: ignore  # noqa: E402
     StrategyUIPick,
     render_hypothesis_vs_final_panel as _render_hypothesis_final_panel,
 )
+from ql_strategy import QLearningStrategy  # type: ignore  # noqa: E402
+from train_ql import run_greedy_evaluation_episodes, train_ql_agent  # type: ignore  # noqa: E402
 from ui.panel_qlearning import render_qlearning_panel as _render_qlearning_panel  # type: ignore  # noqa: E402
 from strategies import (  # type: ignore  # noqa: E402
     Strategy,
@@ -58,6 +60,10 @@ from strategies import (  # type: ignore  # noqa: E402
     ReputationStrategy,
     MinimaxStrategy,
 )
+
+# Q-learning online training (sidebar match) — same schedule as offline panel defaults.
+_QL_TRAIN_EPS_START = 0.25
+_QL_TRAIN_EPS_END = 0.05
 
 PREFERENCE_KEYS: Tuple[str, ...] = (
     "round_win",
@@ -87,6 +93,7 @@ STRATEGIES: List[StrategyChoice] = [
     StrategyChoice("Entertainer (spectacle / stay)", EntertainerStrategy),
     StrategyChoice("Reputation (crowd meter)", ReputationStrategy),
     StrategyChoice("Minimax (resilience diff)", MinimaxStrategy),
+    StrategyChoice("Q-learning (tabular)", QLearningStrategy),
 ]
 
 
@@ -263,6 +270,62 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
         )
         params["seed"] = int(seed) if use_seed else None
 
+    if cls is QLearningStrategy:
+        st.caption(
+            "Trains automatically vs the **other** player’s strategy when you start a match, "
+            "then runs a short greedy eval. Live play is **greedy** (no further learning)."
+        )
+        params["ql_training_episodes"] = int(
+            st.number_input(
+                f"{label_prefix} QL training episodes",
+                min_value=10,
+                max_value=2000,
+                value=120,
+                step=10,
+                key=f"{label_prefix}_ql_train_eps",
+            )
+        )
+        params["ql_training_max_rounds"] = int(
+            st.number_input(
+                f"{label_prefix} QL max rounds per training game",
+                min_value=3,
+                max_value=40,
+                value=12,
+                step=1,
+                key=f"{label_prefix}_ql_train_max_r",
+            )
+        )
+        params["ql_greedy_eval_episodes"] = int(
+            st.number_input(
+                f"{label_prefix} QL greedy eval episodes (post-train)",
+                min_value=0,
+                max_value=200,
+                value=15,
+                step=1,
+                key=f"{label_prefix}_ql_eval_eps",
+            )
+        )
+        params["ql_seed"] = int(
+            st.number_input(
+                f"{label_prefix} QL RNG seed",
+                min_value=0,
+                value=0,
+                step=1,
+                key=f"{label_prefix}_ql_seed",
+            )
+        )
+        params["ql_minimax_depth"] = int(
+            st.number_input(
+                f"{label_prefix} QL training minimax depth (if opponent is minimax)",
+                min_value=1,
+                max_value=6,
+                value=2,
+                step=1,
+                key=f"{label_prefix}_ql_mm_depth",
+                help="Used only when the other player uses Minimax; otherwise ignored.",
+            )
+        )
+
     return params
 
 
@@ -295,7 +358,56 @@ def _build_strategy(choice: StrategyUIPick, player: str, params: Dict[str, Any])
     Returns:
         A strategy.
     """
+    if choice.cls is QLearningStrategy:
+        return QLearningStrategy(player, seed=int(params.get("ql_seed", 0)))
     return choice.cls(player, **params)
+
+
+def _minimax_depth_for_train_ql(opponent: Strategy, fallback: int) -> int:
+    if isinstance(opponent, MinimaxStrategy):
+        return int(getattr(opponent, "depth", fallback))
+    return int(fallback)
+
+
+def _train_and_eval_ql_for_live_match(
+    agent: QLearningStrategy,
+    opponent: Strategy,
+    *,
+    agent_plays_p1: bool,
+    agent_params: Dict[str, Any],
+) -> None:
+    """Train tabular Q vs the fixed opponent, optional greedy eval, then freeze for live engine."""
+    episodes = int(agent_params.get("ql_training_episodes", 120))
+    max_tr = int(agent_params.get("ql_training_max_rounds", 12))
+    eval_eps = int(agent_params.get("ql_greedy_eval_episodes", 15))
+    seed = int(agent_params.get("ql_seed", 0))
+    md = _minimax_depth_for_train_ql(
+        opponent, int(agent_params.get("ql_minimax_depth", 2))
+    )
+    train_ql_agent(
+        agent,
+        opponent,
+        episodes=episodes,
+        max_rounds=max_tr,
+        agent_plays_p1=agent_plays_p1,
+        epsilon_start=_QL_TRAIN_EPS_START,
+        epsilon_end=_QL_TRAIN_EPS_END,
+        minimax_depth=md,
+        random_seed=seed,
+    )
+    if eval_eps > 0:
+        run_greedy_evaluation_episodes(
+            agent,
+            opponent,
+            episodes=eval_eps,
+            max_rounds=max_tr,
+            agent_plays_p1=agent_plays_p1,
+            minimax_depth=md,
+            random_seed=seed,
+        )
+    agent.learn = False
+    agent.epsilon = 0.0
+    agent.reset_episode()
 
 
 def _init_match(
@@ -317,6 +429,22 @@ def _init_match(
     """
     p1_strategy = _build_strategy(p1_choice, "p1", p1_params)
     p2_strategy = _build_strategy(p2_choice, "p2", p2_params)
+    if isinstance(p1_strategy, QLearningStrategy) and isinstance(p2_strategy, QLearningStrategy):
+        st.error(
+            "Only one player can use Q-learning in a match. Pick a built-in strategy for the other player, "
+            "then click **Start New Game** again."
+        )
+        return
+    if isinstance(p1_strategy, QLearningStrategy):
+        with st.spinner("Training P1 Q-learning vs P2 (then greedy eval)…"):
+            _train_and_eval_ql_for_live_match(
+                p1_strategy, p2_strategy, agent_plays_p1=True, agent_params=p1_params
+            )
+    if isinstance(p2_strategy, QLearningStrategy):
+        with st.spinner("Training P2 Q-learning vs P1 (then greedy eval)…"):
+            _train_and_eval_ql_for_live_match(
+                p2_strategy, p1_strategy, agent_plays_p1=False, agent_params=p2_params
+            )
     st.session_state["match"] = init_match_session(
         p1_strategy=p1_strategy,
         p2_strategy=p2_strategy,
@@ -390,6 +518,18 @@ def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
     return rows
 
 
+def _build_strategy_for_ne_panel(
+    pick: StrategyUIPick, player: str, params: Dict[str, Any]
+) -> Strategy:
+    """Use trained Q-learning instances from the live match when the sidebar choice matches."""
+    match: Optional[MatchSession] = st.session_state.get("match")
+    if match is not None and pick.cls is QLearningStrategy:
+        inst = match.p1_strategy if player == "p1" else match.p2_strategy
+        if isinstance(inst, QLearningStrategy) and inst.player == player:
+            return inst
+    return _build_strategy(pick, player, params)
+
+
 def _render_hypothesis_vs_final_panel(
     p1_choice: StrategyChoice,
     p2_choice: StrategyChoice,
@@ -410,7 +550,7 @@ def _render_hypothesis_vs_final_panel(
         p2_params,
         p1_prefs,
         p2_prefs,
-        build_strategy=_build_strategy,
+        build_strategy=_build_strategy_for_ne_panel,
         live_base_gamestate=live_base,
     )
 
@@ -585,7 +725,9 @@ def main() -> None:
         elif shutdown_now and not allow_shutdown:
             st.error("Please click the checkbox to confirm you're done playing.")
 
-    if start_new or st.session_state.get("match") is None:
+    if start_new:
+        _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
+    elif st.session_state.get("match") is None:
         _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
 
     if step_once:
@@ -594,7 +736,12 @@ def main() -> None:
         else:
             _advance_one_round()
 
-    match2: MatchSession = st.session_state["match"]
+    match2: Optional[MatchSession] = st.session_state.get("match")
+    if match2 is None:
+        st.error(
+            "No active match. Adjust strategies (only one side may be Q-learning) and click **Start New Game**."
+        )
+        return
     engine: GameEngine = match2.engine
     p1_strategy: Strategy = match2.p1_strategy
     p2_strategy: Strategy = match2.p2_strategy
