@@ -12,6 +12,22 @@ from nash_normal_form import (
     hypothesis_joint_distribution,
 )
 
+# --- P1-advantage heatmap (shared scale across hypothesis vs final matrices) ---
+_P1_ADV_R_P2_FAVORS, _P1_ADV_G_P2_FAVORS, _P1_ADV_B_P2_FAVORS = 240, 80, 80
+_P1_ADV_R_P1_FAVORS, _P1_ADV_G_P1_FAVORS, _P1_ADV_B_P1_FAVORS = 18, 200, 95
+_P1_ADV_TEXT_DARK, _P1_ADV_TEXT_LIGHT = "#111111", "#f8fff8"
+_P1_ADV_TEXT_LIGHT_THRESHOLD = 0.52
+
+# --- Empirical joint-frequency heatmap ---
+_JOINT_R_EMPTY, _JOINT_G_EMPTY, _JOINT_B_EMPTY = 248, 248, 255
+_JOINT_R_FULL, _JOINT_G_FULL, _JOINT_B_FULL = 30, 80, 160
+_JOINT_TEXT_DARK, _JOINT_TEXT_LIGHT = "#111111", "#0a1628"
+_JOINT_TEXT_LIGHT_THRESHOLD = 0.45
+
+# --- Pure NE cell highlight ---
+_PURE_NE_OUTLINE_PX = 3
+_PURE_NE_OUTLINE_COLOR = "#ffc107"
+
 
 def _cell_rgb_p1_advantage(u1: int, u2: int, adv_min: int, adv_max: int) -> str:
     """Heatmap by P1 advantage (u1−u2); global adv_min/adv_max for comparable panels."""
@@ -21,20 +37,20 @@ def _cell_rgb_p1_advantage(u1: int, u2: int, adv_min: int, adv_max: int) -> str:
     else:
         t = 0.5
     t = max(0.0, min(1.0, t))
-    r = int(240 - t * (240 - 18))
-    g = int(80 + t * (200 - 80))
-    b = int(80 + t * (95 - 80))
-    text = "#111111" if t < 0.52 else "#f8fff8"
+    r = int(_P1_ADV_R_P2_FAVORS - t * (_P1_ADV_R_P2_FAVORS - _P1_ADV_R_P1_FAVORS))
+    g = int(_P1_ADV_G_P2_FAVORS + t * (_P1_ADV_G_P1_FAVORS - _P1_ADV_G_P2_FAVORS))
+    b = int(_P1_ADV_B_P2_FAVORS + t * (_P1_ADV_B_P1_FAVORS - _P1_ADV_B_P2_FAVORS))
+    text = _P1_ADV_TEXT_DARK if t < _P1_ADV_TEXT_LIGHT_THRESHOLD else _P1_ADV_TEXT_LIGHT
     return f"background: rgb({r},{g},{b}); color: {text};"
 
 
 def _cell_rgb_empirical_rate(rate: float) -> str:
     """Background from empirical joint frequency count/N (0..1)."""
     t = max(0.0, min(1.0, rate))
-    r = int(248 - t * (248 - 30))
-    g = int(248 - t * (248 - 80))
-    b = int(255 - t * (255 - 160))
-    text = "#111111" if t < 0.45 else "#0a1628"
+    r = int(_JOINT_R_EMPTY - t * (_JOINT_R_EMPTY - _JOINT_R_FULL))
+    g = int(_JOINT_G_EMPTY - t * (_JOINT_G_EMPTY - _JOINT_G_FULL))
+    b = int(_JOINT_B_EMPTY - t * (_JOINT_B_EMPTY - _JOINT_B_FULL))
+    text = _JOINT_TEXT_DARK if t < _JOINT_TEXT_LIGHT_THRESHOLD else _JOINT_TEXT_LIGHT
     return f"background: rgb({r},{g},{b}); color: {text};"
 
 
@@ -69,7 +85,11 @@ def _one_matrix_html(
             u1, u2 = nf.payoff_p1[i][j], nf.payoff_p2[i][j]
             bg = _cell_rgb_p1_advantage(u1, u2, adv_min, adv_max)
             is_ne = (i, j) in ne_set
-            ne_extra = " box-shadow: inset 0 0 0 3px #ffc107; font-weight: 700;" if is_ne else ""
+            ne_extra = (
+                f" box-shadow: inset 0 0 0 {_PURE_NE_OUTLINE_PX}px {_PURE_NE_OUTLINE_COLOR}; font-weight: 700;"
+                if is_ne
+                else ""
+            )
             inner = f"({u1}, {u2})"
             if is_ne:
                 inner += "  ·  NE"

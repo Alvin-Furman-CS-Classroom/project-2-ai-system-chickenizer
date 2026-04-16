@@ -10,6 +10,10 @@ import streamlit as st
 from ql_strategy import QLearningStrategy
 from train_ql import OPPONENT_CHOICES, train_ql_agent
 
+# Offline demo defaults (panel-only; training script may use other schedules).
+_QL_EPSILON_START = 0.25
+_QL_EPSILON_END = 0.05
+
 
 def render_learned_q_table(agent: QLearningStrategy) -> None:
     """Show learned Q-table and JSON download button."""
@@ -55,8 +59,8 @@ def render_qlearning_panel() -> None:
                     opponent=ql_opp,
                     episodes=int(ql_episodes),
                     max_rounds=int(ql_max_rounds),
-                    epsilon_start=0.25,
-                    epsilon_end=0.05,
+                    epsilon_start=_QL_EPSILON_START,
+                    epsilon_end=_QL_EPSILON_END,
                 )
             st.session_state["ql_demo_agent"] = demo
         agent: Any = st.session_state.get("ql_demo_agent")

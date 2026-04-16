@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Protocol, Type
 
 import streamlit as st
 
@@ -11,21 +11,32 @@ from nash_normal_form import (
     format_joint_play_vs_hypothesis_ascii,
     format_nash_hypothesis_vs_final_ascii,
 )
+from strategies import Strategy
 from ui.hypothesis_final_html import (
     hypothesis_final_side_by_side_html,
     joint_play_vs_hypothesis_html,
 )
 
 
+class _StrategyUIPick(Protocol):
+    """Structural type for sidebar strategy rows (``StrategyChoice`` in ``streamlit_app``).
+
+    Defined here to avoid importing the Streamlit module from panel code (circular import).
+    """
+
+    label: str
+    cls: Type[Strategy]
+
+
 def render_hypothesis_vs_final_panel(
-    p1_choice: Any,
-    p2_choice: Any,
+    p1_choice: _StrategyUIPick,
+    p2_choice: _StrategyUIPick,
     p1_params: Dict[str, Any],
     p2_params: Dict[str, Any],
     p1_prefs: Dict[str, int],
     p2_prefs: Dict[str, int],
     *,
-    build_strategy: Callable[[Any, str, Dict[str, Any]], Any],
+    build_strategy: Callable[[_StrategyUIPick, str, Dict[str, Any]], Strategy],
     live_base_gamestate: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Side-by-side hypothesis / final NE, joint-play table, optional ASCII export."""

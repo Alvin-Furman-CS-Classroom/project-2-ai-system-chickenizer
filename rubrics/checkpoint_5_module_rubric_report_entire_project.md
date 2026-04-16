@@ -23,13 +23,15 @@ Checkpoint **#5** requires **four** reports in an obvious place. This file is **
 
 Scores **all** source under **`.src/`**, **all** `unit_tests/` and `integration_tests/`, and **GitHub practices** evidenced from this repository’s history—not restricted to Module 5 files.
 
+**Streamlit UI (current layout, `.src/ui/`):** `streamlit_app.py` (page composition), `panel_hypothesis_final.py` + `hypothesis_final_html.py` (one-shot Nash vs match + joint-play tables), `panel_qlearning.py` (offline Q-learning demo), `arena_view.py` (animated arena).
+
 **Automated verification**
 
 ```bash
 python -m pytest unit_tests integration_tests -q
 ```
 
-→ **239 passed** (April 15, 2026): **231** unit, **8** integration.
+→ **246 passed** (April 15, 2026): **238** unit, **8** integration.
 
 ---
 
@@ -62,7 +64,7 @@ The **full Chickenizer codebase** satisfies the module rubric at **full points**
 
 ### 1.1 Functionality — **8 / 8**
 
-Full stack (KB, search, engine, strategies, Nash, repeated analysis, RL, Streamlit) is exercised by **239** passing tests; integration tests prove cross-module behavior.
+Full stack (KB, search, engine, strategies, Nash, repeated analysis, RL, Streamlit) is exercised by **246** passing tests; integration tests prove cross-module behavior.
 
 ### 1.2 Code elegance and quality — **7 / 7**
 
@@ -141,4 +143,18 @@ There is **no remaining hard technical blocker** inside the repo for **50/50** o
 - **Participation:** “SATISFIED” + `git shortlog` block.  
 - **§1.2:** `checkpoint_5_elegance_report_entire_project.md` → **4.00** average.  
 - **Total:** **50 / 50**.  
-- **Tests:** **239 passed**.
+- **Tests:** **246 passed**.
+
+---
+
+## Final pass verification (Checkpoint #5 — this deliverable)
+
+| Check | Result |
+|--------|--------|
+| One of **four** required reports in `rubrics/` (module rubric × entire project) | Yes |
+| **Participation** (mandatory gate) | **SATISFIED** (see `git shortlog` + merge evidence above) |
+| [Module Review Rubric](https://csc-343.path.app/projects/project-2-ai-system/ai-system.rubric.md) Part 1 | **27 / 27** (incl. §1.2 elegance **7 / 7**, per companion elegance avg **4.00**) |
+| Part 2 | **15 / 15** |
+| Part 3 | **8 / 8** |
+| **Total** | **50 / 50** |
+| `python -m pytest unit_tests integration_tests -q` | **246 passed** (**238** unit + **8** integration) |

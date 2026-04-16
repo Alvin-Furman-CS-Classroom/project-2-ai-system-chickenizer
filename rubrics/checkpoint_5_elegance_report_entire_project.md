@@ -30,7 +30,7 @@ All executable project code under **`.src/`** (knowledge base, search, engine, s
 - Logic / search / sim: `module1_kb.py`, `module2_search.py`, `engine.py`, `strategies.py`, `strategy_addons.py`  
 - Equilibrium & analysis: `nash_normal_form.py`, `nash_repeated_analysis.py`, `nash_strategy_matchups.py`, `analysis_payloads.py`, `match_session.py`, `hypothesis_coordination_deviation.py`, `nash_hypothesis_vs_final_demo.py`, `walkthrough_nash_match_pipeline.py`  
 - RL: `train_ql.py`, `ql_strategy.py`, `ql_tournament.py`, `train_ql_trace.py`  
-- UI: `.src/ui/*.py`  
+- UI: `.src/ui/streamlit_app.py`, `.src/ui/panel_hypothesis_final.py`, `.src/ui/hypothesis_final_html.py`, `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
 - Tooling: `bootstrap_dot_src.py`, `debug_logger.py`  
 
 **Verification**
@@ -39,13 +39,13 @@ All executable project code under **`.src/`** (knowledge base, search, engine, s
 python -m pytest unit_tests integration_tests -q
 ```
 
-**Result:** **239 passed** (April 15, 2026).
+**Result:** **246 passed** (April 15, 2026).
 
 ---
 
 ## Summary
 
-Taken as a **whole system**, Chickenizer presents **professional, readable structure**: engine and strategies stay separate from Nash and analysis layers; RL code is isolated; UI is panelized; tests encode contracts. Larger files (`nash_normal_form.py`, `module1_kb.py`) reflect **dense course-topic implementations** (CNF, equilibria, payoff machinery) but remain internally segmented with helpers and types. The instructor has **approved** deviation from the template `src/` folder name; import compatibility shims are a **pragmatic packaging layer**, not unstructured spaghetti.
+Taken as a **whole system**, Chickenizer presents **professional, readable structure**: engine and strategies stay separate from Nash and analysis layers; RL code is isolated; the Streamlit layer is split into **`streamlit_app.py`** (composition), **hypothesis vs final** panel + HTML helpers, **Q-learning** panel, and **`arena_view`**; tests encode contracts. Larger files (`nash_normal_form.py`, `module1_kb.py`) reflect **dense course-topic implementations** (CNF, equilibria, payoff machinery) but remain internally segmented with helpers and types. The instructor has **approved** deviation from the template `src/` folder name; import compatibility shims are a **pragmatic packaging layer**, not unstructured spaghetti.
 
 ---
 
@@ -75,7 +75,7 @@ Taken as a **whole system**, Chickenizer presents **professional, readable struc
 
 ### Critical
 
-- **None** (239 tests passing).
+- **None** (246 tests passing).
 
 ### Major
 
@@ -104,5 +104,16 @@ Taken as a **whole system**, Chickenizer presents **professional, readable struc
 - **Scope:** Entire project (section “Scope (entire project)”).  
 - **Eight-criterion table:** “Rubric scores.”  
 - **Average:** **4.00**.  
-- **Tests:** `pytest` → **239 passed**.  
+- **Tests:** `pytest` → **246 passed**.  
 - **Sibling module rubric file:** `checkpoint_5_module_rubric_report_entire_project.md`.
+
+---
+
+## Final pass verification (Checkpoint #5 — this deliverable)
+
+| Check | Result |
+|--------|--------|
+| One of **four** required reports in `rubrics/` (elegance × entire project) | Yes |
+| [Code Elegance Rubric](https://csc-343.path.app/rubrics/code-elegance.rubric.md): eight criteria | **4 / 4 each → average 4.00** (table above) |
+| Companion module rubric: §1.2 + Part 1–3 total | **`checkpoint_5_module_rubric_report_entire_project.md` → §1.2 = 7/7, total 50/50** |
+| `python -m pytest unit_tests integration_tests -q` | **246 passed** |

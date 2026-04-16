@@ -29,7 +29,7 @@ Per Checkpoint **#5** instructions, this repository provides **four separate rep
 
 - `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`  
 - `.src/hypothesis_coordination_deviation.py`, `.src/nash_hypothesis_vs_final_demo.py`, `.src/walkthrough_nash_match_pipeline.py`, `.src/nash_strategy_matchups.py`  
-- `.src/ui/streamlit_app.py`, `.src/ui/panel_hypothesis_final.py`, `.src/ui/hypothesis_final_html.py`, `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
+- `.src/ui/streamlit_app.py` (composition), `.src/ui/panel_hypothesis_final.py` + `.src/ui/hypothesis_final_html.py` (hypothesis vs final NE + joint-play), `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
 
 **Evidence (tests)**
 
@@ -43,7 +43,7 @@ Per Checkpoint **#5** instructions, this repository provides **four separate rep
 python -m pytest unit_tests integration_tests -q
 ```
 
-**Result:** **239 passed** (recorded April 15, 2026).
+**Result:** **246 passed** (recorded April 15, 2026).
 
 ---
 
@@ -61,7 +61,7 @@ Checkpoint 5 code meets the **“exceeds / professional”** intent of the elega
 | 2 | Function and method design | **4** | Aggregation and history parsing live in focused helpers; UI logic is delegated to panels; remaining orchestration in `streamlit_app.py` is composition, not mixed domain responsibilities. |
 | 3 | Abstraction and modularity | **4** | Clear seams: analysis vs payloads vs match session vs UI; dataclasses/dicts define contracts consumed by tests and Streamlit. |
 | 4 | Style consistency | **4** | Uniform typing/docstring conventions across reviewed modules; matches repository style. |
-| 5 | Code hygiene | **4** | No dead commented-out blocks in reviewed paths; repeated logic is factored into helpers/payloads; constants grouped where used (e.g. strategy preference keys in app). |
+| 5 | Code hygiene | **4** | No dead commented-out blocks in reviewed paths; repeated logic is factored into helpers/payloads; named constants for UI heatmaps (`hypothesis_final_html.py`) and Q-learning demo epsilons (`panel_qlearning.py`); strategy preference keys centralized in `streamlit_app.py`. |
 | 6 | Control flow clarity | **4** | Early validation for invalid players / empty histories; aggregation loops are linear and explicit. |
 | 7 | Pythonic idioms | **4** | Dataclasses, comprehensions, appropriate collection usage (`defaultdict` patterns where needed). |
 | 8 | Error handling | **4** | Invalid inputs guarded in analysis; Streamlit entry uses defensive import/bootstrap **only** at the process boundary with documented rationale; analysis code uses specific checks rather than silent failure. |
@@ -108,5 +108,16 @@ Checkpoint 5 code meets the **“exceeds / professional”** intent of the elega
 - **Scope statement:** First section of this file states “checkpoint code only.”  
 - **Scores location:** Table under “Rubric scores.”  
 - **Overall average:** **4.00** (eight criteria).  
-- **Test command + outcome:** `pytest` → **239 passed** (full suite sanity-check).  
+- **Test command + outcome:** `pytest` → **246 passed** (full suite sanity-check).  
 - **Sibling file for §1.2 mapping:** `checkpoint_5_module_rubric_report_checkpoint_code.md`.
+
+---
+
+## Final pass verification (Checkpoint #5 — this deliverable)
+
+| Check | Result |
+|--------|--------|
+| One of **four** required reports in `rubrics/` (elegance × checkpoint scope) | Yes |
+| [Code Elegance Rubric](https://csc-343.path.app/rubrics/code-elegance.rubric.md): eight criteria | **4 / 4 each → average 4.00** (table above) |
+| Companion module rubric: §1.2 + Part 1–3 total | **`checkpoint_5_module_rubric_report_checkpoint_code.md` → §1.2 = 7/7, total 50/50** |
+| `python -m pytest unit_tests integration_tests -q` | **246 passed** |

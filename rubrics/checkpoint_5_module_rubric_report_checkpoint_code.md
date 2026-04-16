@@ -25,7 +25,7 @@ Same footprint as the companion elegance report:
 
 - `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`  
 - `.src/hypothesis_coordination_deviation.py`, `.src/nash_hypothesis_vs_final_demo.py`, `.src/walkthrough_nash_match_pipeline.py`, `.src/nash_strategy_matchups.py`  
-- `.src/ui/streamlit_app.py`, `.src/ui/panel_hypothesis_final.py`, `.src/ui/hypothesis_final_html.py`, `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
+- `.src/ui/streamlit_app.py` (composition), `.src/ui/panel_hypothesis_final.py` + `.src/ui/hypothesis_final_html.py` (hypothesis vs final NE + joint-play), `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
 
 **Tests evidencing this checkpoint:** `unit_tests/test_nash_repeated_analysis.py`, `unit_tests/test_hypothesis_coordination_deviation.py`, `integration_tests/module5/*`, and cross-module tests under `integration_tests/module2|3|4/` that assert Module 5 outputs.
 
@@ -35,7 +35,7 @@ Same footprint as the companion elegance report:
 python -m pytest unit_tests integration_tests -q
 ```
 
-→ **239 passed** (April 15, 2026).
+→ **246 passed** (April 15, 2026).
 
 ---
 
@@ -72,7 +72,7 @@ Checkpoint 5 deliverables are **complete**, **test-backed**, and **documented**.
 
 | Rubric anchor | Awarded | Why |
 |---------------|---------|-----|
-| “All features work correctly… No crashes” | **8** | Repeated-play + normal-form analysis paths used by UI are covered by unit and integration tests; **239** tests pass including multi-module flows into analysis. |
+| “All features work correctly… No crashes” | **8** | Repeated-play + normal-form analysis paths used by UI are covered by unit and integration tests; **246** tests pass including multi-module flows into analysis. |
 
 ### 1.2 Code elegance and quality — **7 / 7**
 
@@ -165,4 +165,18 @@ Logical grouping (`unit_tests/`, `integration_tests/module5/`, etc.); descriptiv
 - **Participation:** “SATISFIED” + `git shortlog` block + merge message pattern.  
 - **§1.2 cross-file:** `checkpoint_5_elegance_report_checkpoint_code.md` → average **4.00**.  
 - **Total row:** **50 / 50**.  
-- **Tests:** `pytest` → **239 passed**.
+- **Tests:** `pytest` → **246 passed**.
+
+---
+
+## Final pass verification (Checkpoint #5 — this deliverable)
+
+| Check | Result |
+|--------|--------|
+| One of **four** required reports in `rubrics/` (module rubric × checkpoint scope) | Yes |
+| **Participation** (mandatory gate) | **SATISFIED** (see `git shortlog` + merge evidence above) |
+| [Module Review Rubric](https://csc-343.path.app/projects/project-2-ai-system/ai-system.rubric.md) Part 1 | **27 / 27** (incl. §1.2 elegance **7 / 7**, per companion elegance avg **4.00**) |
+| Part 2 | **15 / 15** |
+| Part 3 | **8 / 8** |
+| **Total** | **50 / 50** |
+| `python -m pytest unit_tests integration_tests -q` | **246 passed** |
