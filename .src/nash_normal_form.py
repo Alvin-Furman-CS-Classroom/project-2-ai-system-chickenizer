@@ -428,6 +428,37 @@ def analyze_normal_form(
     )
 
 
+def analyze_normal_form_from_merged_state(
+    p1_strategy: Strategy,
+    p2_strategy: Strategy,
+    merged_gamestate: Dict[str, Any],
+    *,
+    include_mixed: bool = True,
+) -> NormalFormResult:
+    """Build payoffs from an already-merged gamestate and compute Nash equilibria.
+
+    Does **not** call ``merge_strategy_preferences`` again; use when preferences
+    already reflect implied + cares (e.g. ``merge_gamestate_with_strategy_and_cares``).
+    """
+    if p1_strategy.player != "p1":
+        raise ValueError(f"p1_strategy must have player='p1', got {p1_strategy.player!r}")
+    if p2_strategy.player != "p2":
+        raise ValueError(f"p2_strategy must have player='p2', got {p2_strategy.player!r}")
+    p1_m, p2_m = build_payoff_matrices_at_merged_state(merged_gamestate)
+    pure = find_pure_nash(p1_m, p2_m)
+    mixed: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+    if include_mixed:
+        mixed = find_mixed_nash(p1_m, p2_m)
+    return NormalFormResult(
+        payoff_p1=p1_m,
+        payoff_p2=p2_m,
+        p1_strategy_name=p1_strategy.__class__.__name__,
+        p2_strategy_name=p2_strategy.__class__.__name__,
+        pure_nash_indices=pure,
+        mixed_equilibria=mixed,
+    )
+
+
 def normal_form_to_dict(
     result: NormalFormResult,
     *,

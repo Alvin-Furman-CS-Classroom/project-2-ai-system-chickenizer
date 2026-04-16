@@ -29,7 +29,7 @@ Per Checkpoint **#5** instructions, this repository provides **four separate rep
 
 - `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`  
 - `.src/hypothesis_coordination_deviation.py`, `.src/nash_hypothesis_vs_final_demo.py`, `.src/walkthrough_nash_match_pipeline.py`, `.src/nash_strategy_matchups.py`  
-- `.src/ui/streamlit_app.py`, `.src/ui/panel_nash.py`, `.src/ui/panel_repeated.py`, `.src/ui/panel_qlearning.py`, `.src/ui/nash_html.py`, `.src/ui/arena_view.py`  
+- `.src/ui/streamlit_app.py`, `.src/ui/panel_hypothesis_final.py`, `.src/ui/hypothesis_final_html.py`, `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
 
 **Evidence (tests)**
 

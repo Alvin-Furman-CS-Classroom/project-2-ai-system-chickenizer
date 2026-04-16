@@ -7,16 +7,13 @@ steps so the same computations can be reused in CLI tools, tests, or other UIs.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from engine import GameEngine
 from nash_normal_form import (
-    RoundNormalFormSnapshot,
-    analyze_normal_form,
-    best_response_correspondences,
-    collect_per_round_normal_forms,
+    analyze_normal_form_from_merged_state,
+    empirical_joint_action_counts,
 )
-from nash_repeated_analysis import analyze_repeated_play
 from strategies import Strategy, merge_strategy_preferences
 
 
@@ -40,15 +37,47 @@ def merge_gamestate_with_strategy_and_cares(
 
 
 @dataclass(frozen=True)
-class OneShotNashPayload:
-    merged_gamestate: Dict[str, Any]
-    # NormalFormResult type lives in `nash_normal_form` but we keep this payload UI-agnostic.
-    normal_form_result: Any
-    best_responses: Dict[str, Any]
-    mixed_skipped: bool
+class HypothesisVsFinalPayload:
+    """Hypothesis (fresh baseline) vs final (live match) one-shot NE, plus joint-play stats."""
+
+    hypothesis_merged: Dict[str, Any]
+    final_merged: Dict[str, Any]
+    hypothesis_nf: Any
+    final_nf: Any
+    mixed_skipped_hypothesis: bool
+    mixed_skipped_final: bool
+    joint_counts: Optional[Tuple[int, int, int, int]]
+    n_rounds: int
+    joint_error: Optional[str]
 
 
-def build_one_shot_nash_payload(
+def _nf_from_merged_safe(
+    p1_strategy: Strategy,
+    p2_strategy: Strategy,
+    merged: Dict[str, Any],
+    *,
+    include_mixed: bool,
+) -> Tuple[Any, bool]:
+    mixed_skipped = False
+    if include_mixed:
+        try:
+            nf = analyze_normal_form_from_merged_state(
+                p1_strategy, p2_strategy, merged, include_mixed=True
+            )
+        except Exception:  # noqa: BLE001
+            nf = analyze_normal_form_from_merged_state(
+                p1_strategy, p2_strategy, merged, include_mixed=False
+            )
+            mixed_skipped = True
+    else:
+        nf = analyze_normal_form_from_merged_state(
+            p1_strategy, p2_strategy, merged, include_mixed=False
+        )
+        mixed_skipped = True
+    return nf, mixed_skipped
+
+
+def build_hypothesis_vs_final_payload(
     p1_strategy: Strategy,
     p2_strategy: Strategy,
     p1_cares: PreferenceDict,
@@ -56,9 +85,20 @@ def build_one_shot_nash_payload(
     *,
     live_base_gamestate: Optional[Dict[str, Any]] = None,
     include_mixed: bool = True,
-) -> OneShotNashPayload:
-    """Build merged state + normal-form Nash analysis + best responses."""
-    merged = merge_gamestate_with_strategy_and_cares(
+) -> HypothesisVsFinalPayload:
+    """Hypothesis NE from a **fresh** engine state; final NE from **live** state when given.
+
+    Joint-action counts come from ``live_base_gamestate`` (match history), same as
+    the ASCII ``report_match_hypothesis_vs_final_nash`` joint table.
+    """
+    hypothesis_merged = merge_gamestate_with_strategy_and_cares(
+        p1_strategy,
+        p2_strategy,
+        p1_cares,
+        p2_cares,
+        base_gamestate=None,
+    )
+    final_merged = merge_gamestate_with_strategy_and_cares(
         p1_strategy,
         p2_strategy,
         p1_cares,
@@ -66,53 +106,34 @@ def build_one_shot_nash_payload(
         base_gamestate=live_base_gamestate,
     )
 
-    mixed_skipped = False
-    if include_mixed:
-        try:
-            nf = analyze_normal_form(p1_strategy, p2_strategy, merged, include_mixed=True)
-        except Exception:  # noqa: BLE001 - optional deps (nashpy/numpy) and edge cases
-            nf = analyze_normal_form(p1_strategy, p2_strategy, merged, include_mixed=False)
-            mixed_skipped = True
-    else:
-        nf = analyze_normal_form(p1_strategy, p2_strategy, merged, include_mixed=False)
-        mixed_skipped = True
-
-    br = best_response_correspondences(nf.payoff_p1, nf.payoff_p2)
-    return OneShotNashPayload(
-        merged_gamestate=merged,
-        normal_form_result=nf,
-        best_responses=br,
-        mixed_skipped=mixed_skipped,
+    hyp_nf, skip_h = _nf_from_merged_safe(
+        p1_strategy, p2_strategy, hypothesis_merged, include_mixed=include_mixed
+    )
+    fin_nf, skip_f = _nf_from_merged_safe(
+        p1_strategy, p2_strategy, final_merged, include_mixed=include_mixed
     )
 
+    joint_counts: Optional[Tuple[int, int, int, int]] = None
+    joint_error: Optional[str] = None
+    n_rounds = 0
+    if live_base_gamestate is not None:
+        h1 = live_base_gamestate.get("p1_action_history") or []
+        n_rounds = len(h1)
+        if n_rounds > 0:
+            try:
+                joint_counts = empirical_joint_action_counts(live_base_gamestate)
+            except ValueError as exc:
+                joint_error = str(exc)
 
-@dataclass(frozen=True)
-class RepeatedAnalysisPayload:
-    merged_gamestate: Dict[str, Any]
-    per_round_normal_forms: List[RoundNormalFormSnapshot]
-    repeated_play_result: Any
-
-
-def build_repeated_analysis_payload(
-    p1_strategy: Strategy,
-    p2_strategy: Strategy,
-    p1_cares: PreferenceDict,
-    p2_cares: PreferenceDict,
-    *,
-    max_rounds: int,
-    base_gamestate: Optional[Dict[str, Any]] = None,
-) -> RepeatedAnalysisPayload:
-    """Build per-round normal forms and repeated-play aggregates from the same merged setup."""
-    cap = max(1, int(max_rounds))
-    merged = merge_gamestate_with_strategy_and_cares(
-        p1_strategy, p2_strategy, p1_cares, p2_cares, base_gamestate=base_gamestate
-    )
-
-    snaps = collect_per_round_normal_forms(p1_strategy, p2_strategy, merged, max_rounds=cap)
-    rp = analyze_repeated_play(p1_strategy, p2_strategy, merged, max_rounds=cap)
-    return RepeatedAnalysisPayload(
-        merged_gamestate=merged,
-        per_round_normal_forms=snaps,
-        repeated_play_result=rp,
+    return HypothesisVsFinalPayload(
+        hypothesis_merged=hypothesis_merged,
+        final_merged=final_merged,
+        hypothesis_nf=hyp_nf,
+        final_nf=fin_nf,
+        mixed_skipped_hypothesis=skip_h,
+        mixed_skipped_final=skip_f,
+        joint_counts=joint_counts,
+        n_rounds=n_rounds,
+        joint_error=joint_error,
     )
 

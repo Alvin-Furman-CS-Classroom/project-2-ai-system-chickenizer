@@ -25,7 +25,7 @@ Same footprint as the companion elegance report:
 
 - `.src/nash_repeated_analysis.py`, `.src/analysis_payloads.py`, `.src/match_session.py`  
 - `.src/hypothesis_coordination_deviation.py`, `.src/nash_hypothesis_vs_final_demo.py`, `.src/walkthrough_nash_match_pipeline.py`, `.src/nash_strategy_matchups.py`  
-- `.src/ui/streamlit_app.py`, `.src/ui/panel_nash.py`, `.src/ui/panel_repeated.py`, `.src/ui/panel_qlearning.py`, `.src/ui/nash_html.py`, `.src/ui/arena_view.py`  
+- `.src/ui/streamlit_app.py`, `.src/ui/panel_hypothesis_final.py`, `.src/ui/hypothesis_final_html.py`, `.src/ui/panel_qlearning.py`, `.src/ui/arena_view.py`  
 
 **Tests evidencing this checkpoint:** `unit_tests/test_nash_repeated_analysis.py`, `unit_tests/test_hypothesis_coordination_deviation.py`, `integration_tests/module5/*`, and cross-module tests under `integration_tests/module2|3|4/` that assert Module 5 outputs.
 
