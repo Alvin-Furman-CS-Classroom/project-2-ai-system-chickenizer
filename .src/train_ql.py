@@ -28,6 +28,7 @@ from strategies import (  # noqa: E402
     DefensiveStrategy,
     EntertainerStrategy,
     FollowerStrategy,
+    ReputationStrategy,
     GameSimulator,
     HPThresholdStrategy,
     MinimaxStrategy,
@@ -52,6 +53,7 @@ OPPONENT_CHOICES = (
     "defensive",
     "entertainer",
     "follower",
+    "reputation",
 )
 
 
@@ -90,6 +92,8 @@ def make_opponent_by_name(
         return EntertainerStrategy(player, seed=random_seed)
     if name in ("follower", "follow"):
         return FollowerStrategy(player)
+    if name in ("reputation", "rep"):
+        return ReputationStrategy(player, seed=random_seed)
     raise ValueError(f"Unknown opponent name: {name!r}; try one of {OPPONENT_CHOICES}")
 
 
@@ -213,8 +217,8 @@ def train_ql_agent(
 
     For string ``opponent`` names, see ``make_opponent_by_name`` / ``OPPONENT_CHOICES``.
     ``minimax_depth`` applies when ``opponent`` is ``\"minimax\"``; ``random_seed`` when
-    ``opponent`` is ``\"random\"`` (``None`` = nondeterministic) or ``\"entertainer\"``
-    (``None`` = nondeterministic stay/swerve noise).
+    ``opponent`` is ``\"random\"`` (``None`` = nondeterministic), ``\"entertainer\"``, or
+    ``\"reputation\"`` (``None`` = nondeterministic stay/swerve noise).
 
     Optional training trace: pass ``training_round_trace_out=[]`` and set
     ``training_round_trace_max_engine_rounds`` > 0 to append per-engine-round rows
@@ -392,7 +396,7 @@ def main() -> None:
         "--random-seed",
         type=int,
         default=None,
-        help="Fixed seed for random or entertainer opponent; omit for nondeterministic noise",
+        help="Fixed seed for random, entertainer, or reputation opponent; omit for nondeterministic noise",
     )
     parser.add_argument(
         "--epsilon-start",

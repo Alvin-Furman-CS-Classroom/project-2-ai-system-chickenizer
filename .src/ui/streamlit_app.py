@@ -52,6 +52,7 @@ from strategies import (  # type: ignore  # noqa: E402
     AggressiveStrategy,
     DefensiveStrategy,
     EntertainerStrategy,
+    ReputationStrategy,
     MinimaxStrategy,
 )
 
@@ -81,6 +82,7 @@ STRATEGIES: List[StrategyChoice] = [
     StrategyChoice("Aggressive (HP)", AggressiveStrategy),
     StrategyChoice("Defensive (HP)", DefensiveStrategy),
     StrategyChoice("Entertainer (spectacle / stay)", EntertainerStrategy),
+    StrategyChoice("Reputation (crowd meter)", ReputationStrategy),
     StrategyChoice("Minimax (resilience diff)", MinimaxStrategy),
 ]
 
@@ -207,6 +209,57 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
         )
         params["seed"] = int(seed) if use_seed else None
 
+    if cls is ReputationStrategy:
+        params["behind_stay_bias"] = float(
+            st.slider(
+                f"{label_prefix} rep: P(stay) when behind on reputation",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.78,
+                step=0.01,
+                key=f"{label_prefix}_rep_behind",
+            )
+        )
+        params["tie_stay_bias"] = float(
+            st.slider(
+                f"{label_prefix} rep: P(stay) when tied",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.50,
+                step=0.01,
+                key=f"{label_prefix}_rep_tie",
+            )
+        )
+        params["ahead_stay_bias"] = float(
+            st.slider(
+                f"{label_prefix} rep: P(stay) when ahead on reputation",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.36,
+                step=0.01,
+                key=f"{label_prefix}_rep_ahead",
+            )
+        )
+        use_seed = st.checkbox(
+            f"{label_prefix} reputation strategy: fix random seed",
+            value=False,
+            key=f"{label_prefix}_rep_use_seed",
+        )
+        seed = (
+            int(
+                st.number_input(
+                    f"{label_prefix} reputation seed",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=f"{label_prefix}_rep_seed",
+                )
+            )
+            if use_seed
+            else 0
+        )
+        params["seed"] = int(seed) if use_seed else None
+
     return params
 
 
@@ -277,6 +330,21 @@ def _advance_one_round() -> None:
         return
     st.session_state["match"] = advance_one_round(match)
 
+
+def _advance_to_end() -> None:
+    """Advance until game over or round cap is reached."""
+    match: Optional[MatchSession] = st.session_state.get("match")
+    if match is None:
+        return
+    cur = match
+    while not cur.game_over:
+        nxt = advance_one_round(cur)
+        if nxt is cur:
+            break
+        cur = nxt
+    st.session_state["match"] = cur
+
+
 def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
     """Creates a list of round rows for the match history interface.
     Args:
@@ -288,13 +356,17 @@ def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
     by_round: Dict[int, Dict[str, Any]] = {}
     for state in engine.gamestate_history:
         rnd = int(state.get("round", 0))
-        by_round[rnd] = state
+        if rnd <= 0:
+            continue
+        p1_hist = state.get("p1_action_history", [])
+        p2_hist = state.get("p2_action_history", [])
+        score = state.get("score", [])
+        # Only keep snapshots that represent a fully completed round.
+        if len(p1_hist) == rnd and len(p2_hist) == rnd and len(score) == rnd:
+            by_round[rnd] = state
 
     rows: List[Dict[str, Any]] = []
     for round_num in sorted(by_round):
-        # skip start round - nothing to display
-        if round_num == 0:
-            continue
         state = by_round[round_num]
         p1_hist = state.get("p1_action_history", [])
         p2_hist = state.get("p2_action_history", [])
@@ -485,7 +557,14 @@ def main() -> None:
         step_disabled = bool(
             match is None or bool(match.game_over)
         )
-        step_once = st.button("Play Next Round", use_container_width=True, disabled=step_disabled)
+        autorun = st.checkbox(
+            "Auto-run to end when playing",
+            value=False,
+            key="autorun_to_end",
+            help="When enabled, pressing the play button simulates all remaining rounds.",
+        )
+        play_label = "Run To End" if autorun else "Play Next Round"
+        step_once = st.button(play_label, use_container_width=True, disabled=step_disabled)
 
         st.divider()
         # close app section
@@ -507,7 +586,10 @@ def main() -> None:
         _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
 
     if step_once:
-        _advance_one_round()
+        if st.session_state.get("autorun_to_end", False):
+            _advance_to_end()
+        else:
+            _advance_one_round()
 
     match2: MatchSession = st.session_state["match"]
     engine: GameEngine = match2.engine
@@ -538,7 +620,10 @@ def main() -> None:
     if match2.game_over:
         st.warning(f"Game over: `{match2.game_over_reason}`")
     else:
-        st.info("Press **Play Next Round** to continue.")
+        if st.session_state.get("autorun_to_end", False):
+            st.info("Press **Run To End** to simulate remaining rounds.")
+        else:
+            st.info("Press **Play Next Round** to continue.")
 
     rows = _round_rows(engine)
     st.subheader("Round history")

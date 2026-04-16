@@ -41,6 +41,13 @@ class TestMakeOpponentByName:
         assert isinstance(f, FollowerStrategy)
         assert f.player == "p1"
 
+    def test_reputation_name_and_seed(self):
+        from strategies import ReputationStrategy  # noqa: PLC0415
+
+        r = make_opponent_by_name("p2", "reputation", random_seed=21)
+        assert isinstance(r, ReputationStrategy)
+        assert r.player == "p2"
+
 
 class TestEpisodeOutcomeFromResilience:
     def test_agent_p1_higher_wins(self):

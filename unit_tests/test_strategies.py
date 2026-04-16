@@ -33,6 +33,7 @@ HPThresholdStrategy = strategies_module.HPThresholdStrategy
 AggressiveStrategy = strategies_module.AggressiveStrategy
 DefensiveStrategy = strategies_module.DefensiveStrategy
 EntertainerStrategy = strategies_module.EntertainerStrategy
+ReputationStrategy = strategies_module.ReputationStrategy
 MinimaxStrategy = strategies_module.MinimaxStrategy
 GameSimulator = strategies_module.GameSimulator
 merge_strategy_preferences = strategies_module.merge_strategy_preferences
@@ -232,6 +233,73 @@ class TestEntertainerStrategy:
         fs = result["final_state"]
         assert fs["p1_action_history"] == ["swerve"] * 5
         assert fs["p1_reputation"] == 0
+
+
+class TestReputationStrategy:
+    def test_implied_preferences(self):
+        r = ReputationStrategy("p2")
+        prefs = r.implied_preferences()
+        assert prefs.get("reputation_delta") == 5
+        assert prefs.get("hp_delta") == 1
+
+    def test_bias_validation(self):
+        with pytest.raises(ValueError, match="behind_stay_bias"):
+            ReputationStrategy("p1", behind_stay_bias=1.01)
+        with pytest.raises(ValueError, match="tie_stay_bias"):
+            ReputationStrategy("p1", tie_stay_bias=-0.01)
+
+    def test_behind_always_stays_when_bias_one(self):
+        r = ReputationStrategy(
+            "p1",
+            behind_stay_bias=1.0,
+            tie_stay_bias=0.0,
+            ahead_stay_bias=0.0,
+            seed=0,
+        )
+        gs = dict(GameEngine().get_gamestate())
+        gs["p1_reputation"] = 0
+        gs["p2_reputation"] = 4
+        gs["p1_hp"] = 100
+        assert r.decide(gs) is True
+
+    def test_ahead_always_swerves_when_ahead_bias_zero(self):
+        r = ReputationStrategy(
+            "p2",
+            behind_stay_bias=1.0,
+            tie_stay_bias=1.0,
+            ahead_stay_bias=0.0,
+            seed=0,
+        )
+        gs = dict(GameEngine().get_gamestate())
+        gs["p2_reputation"] = 3
+        gs["p1_reputation"] = 0
+        gs["p2_hp"] = 100
+        assert r.decide(gs) is False
+
+    def test_hp_floor_swerves(self):
+        r = ReputationStrategy(
+            "p1",
+            behind_stay_bias=1.0,
+            tie_stay_bias=1.0,
+            ahead_stay_bias=1.0,
+            seed=0,
+        )
+        gs = dict(GameEngine().get_gamestate())
+        gs["p1_hp"] = int(gs.get("p1_hp_thresh", 20))
+        gs["p1_reputation"] = 0
+        gs["p2_reputation"] = 10
+        assert r.decide(gs) is False
+
+    def test_simulate_reputation_tracks_gaps(self):
+        """Behind/ahead branches both occur when rep counts diverge."""
+        sim = GameSimulator()
+        p1 = AlwaysSwerveStrategy("p1")
+        p2 = ReputationStrategy("p2", behind_stay_bias=1.0, tie_stay_bias=0.5, ahead_stay_bias=0.0, seed=1)
+        result = sim.simulate(p1, p2, max_rounds=12)
+        fs = result["final_state"]
+        assert fs["p2_reputation"] >= 1
+        stays = sum(1 for a in fs["p2_action_history"] if a == "stay")
+        assert stays == fs["p2_reputation"]
 
 
 class TestMinimaxStrategy:

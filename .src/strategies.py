@@ -322,6 +322,60 @@ class EntertainerStrategy(Strategy):
         return {"reputation_delta": 6, "hp_delta": 1}
 
 
+class ReputationStrategy(Strategy):
+    """Audience-driven play: **`decide` uses `p1_reputation` / `p2_reputation`**.
+
+    Compares own reputation to the opponent's. When **behind** on reputation, biases toward
+    **stay** (chase the crowd). When **ahead** or **tied**, biases lower (conserve HP / avoid
+    needless duels). Declares ``reputation_delta`` (and ``hp_delta``) so stays still feed the
+    engine's reputation counter and resilience preferences—same mechanism as ``Entertainer``,
+    but the policy explicitly reacts to the meters.
+
+    Stochastic unless biases are 0.0 or 1.0; use ``seed`` for reproducibility.
+    """
+
+    def __init__(
+        self,
+        player: str,
+        *,
+        behind_stay_bias: float = 0.78,
+        tie_stay_bias: float = 0.50,
+        ahead_stay_bias: float = 0.36,
+        seed: Optional[int] = None,
+    ):
+        super().__init__(player)
+        for name, v in (
+            ("behind_stay_bias", behind_stay_bias),
+            ("tie_stay_bias", tie_stay_bias),
+            ("ahead_stay_bias", ahead_stay_bias),
+        ):
+            if not 0.0 <= float(v) <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1], got {v!r}")
+        self.behind_stay_bias = float(behind_stay_bias)
+        self.tie_stay_bias = float(tie_stay_bias)
+        self.ahead_stay_bias = float(ahead_stay_bias)
+        self._rng = random.Random(seed) if seed is not None else random
+
+    def decide(self, gamestate: Dict[str, Any]) -> bool:
+        hp_thresh = int(gamestate.get(f"{self.player}_hp_thresh", 20))
+        current_hp = int(gamestate.get(f"{self.player}_hp", 100))
+        if current_hp <= hp_thresh:
+            return False
+
+        mine = int(gamestate.get(f"{self.player}_reputation", 0))
+        theirs = int(gamestate.get(f"{self.opponent}_reputation", 0))
+        if mine < theirs:
+            p = self.behind_stay_bias
+        elif mine > theirs:
+            p = self.ahead_stay_bias
+        else:
+            p = self.tie_stay_bias
+        return self._rng.random() < p
+
+    def implied_preferences(self) -> Dict[str, int]:
+        return {"reputation_delta": 5, "hp_delta": 1}
+
+
 class MinimaxStrategy(Strategy):
     """Depth-limited minimax strategy assuming resilience-based zero-sum game.
     
