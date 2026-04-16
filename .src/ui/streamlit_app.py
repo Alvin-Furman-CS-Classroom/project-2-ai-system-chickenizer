@@ -39,9 +39,8 @@ elif str(DOT_SRC) not in sys.path:
 from engine import GameEngine  # type: ignore  # noqa: E402
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
 from ui.arena_view import render_arena as _render_arena_view  # type: ignore  # noqa: E402
-from ui.panel_nash import render_nash_normal_form_panel as _render_nash_panel  # type: ignore  # noqa: E402
+from ui.panel_hypothesis_final import render_hypothesis_vs_final_panel as _render_hypothesis_final_panel  # type: ignore  # noqa: E402
 from ui.panel_qlearning import render_qlearning_panel as _render_qlearning_panel  # type: ignore  # noqa: E402
-from ui.panel_repeated import render_repeated_play_panel as _render_repeated_panel  # type: ignore  # noqa: E402
 from strategies import (  # type: ignore  # noqa: E402
     Strategy,
     AlwaysStayStrategy,
@@ -316,7 +315,7 @@ def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
     return rows
 
 
-def _render_nash_normal_form_panel(
+def _render_hypothesis_vs_final_panel(
     p1_choice: StrategyChoice,
     p2_choice: StrategyChoice,
     p1_params: Dict[str, Any],
@@ -324,12 +323,12 @@ def _render_nash_normal_form_panel(
     p1_prefs: Dict[str, int],
     p2_prefs: Dict[str, int],
 ) -> None:
-    """Delegate one-shot Nash panel rendering to modular UI helper."""
+    """Hypothesis vs final NE (same story as ASCII helpers) using live match state when available."""
     match: Optional[MatchSession] = st.session_state.get("match")
     live_base: Optional[Dict[str, Any]] = None
     if match is not None:
         live_base = match.engine.get_gamestate()
-    _render_nash_panel(
+    _render_hypothesis_final_panel(
         p1_choice,
         p2_choice,
         p1_params,
@@ -338,28 +337,6 @@ def _render_nash_normal_form_panel(
         p2_prefs,
         build_strategy=_build_strategy,
         live_base_gamestate=live_base,
-    )
-
-
-def _render_repeated_play_panel(
-    p1_choice: StrategyChoice,
-    p2_choice: StrategyChoice,
-    p1_params: Dict[str, Any],
-    p2_params: Dict[str, Any],
-    p1_prefs: Dict[str, int],
-    p2_prefs: Dict[str, int],
-    max_rounds: int,
-) -> None:
-    """Delegate repeated-play panel rendering to modular UI helper."""
-    _render_repeated_panel(
-        p1_choice,
-        p2_choice,
-        p1_params,
-        p2_params,
-        p1_prefs,
-        p2_prefs,
-        max_rounds,
-        build_strategy=_build_strategy,
     )
 
 
@@ -549,23 +526,13 @@ def main() -> None:
             action_nonce=int(match2.arena_action_nonce),
         )
 
-    _render_nash_normal_form_panel(
+    _render_hypothesis_vs_final_panel(
         p1_choice,
         p2_choice,
         p1_params,
         p2_params,
         p1_prefs,
         p2_prefs,
-    )
-
-    _render_repeated_play_panel(
-        p1_choice,
-        p2_choice,
-        p1_params,
-        p2_params,
-        p1_prefs,
-        p2_prefs,
-        max_rounds,
     )
 
     if match2.game_over:
