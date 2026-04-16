@@ -39,7 +39,10 @@ elif str(DOT_SRC) not in sys.path:
 from engine import GameEngine  # type: ignore  # noqa: E402
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
 from ui.arena_view import render_arena as _render_arena_view  # type: ignore  # noqa: E402
-from ui.panel_hypothesis_final import render_hypothesis_vs_final_panel as _render_hypothesis_final_panel  # type: ignore  # noqa: E402
+from ui.panel_hypothesis_final import (  # type: ignore  # noqa: E402
+    StrategyUIPick,
+    render_hypothesis_vs_final_panel as _render_hypothesis_final_panel,
+)
 from ui.panel_qlearning import render_qlearning_panel as _render_qlearning_panel  # type: ignore  # noqa: E402
 from strategies import (  # type: ignore  # noqa: E402
     Strategy,
@@ -282,7 +285,7 @@ def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
     return prefs
 
 
-def _build_strategy(choice: StrategyChoice, player: str, params: Dict[str, Any]) -> Strategy:
+def _build_strategy(choice: StrategyUIPick, player: str, params: Dict[str, Any]) -> Strategy:
     """Builds a strategy from a choice and parameters.
     Args:
         choice: The strategy choice.

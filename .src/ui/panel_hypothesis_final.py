@@ -18,25 +18,29 @@ from ui.hypothesis_final_html import (
 )
 
 
-class _StrategyUIPick(Protocol):
+class StrategyUIPick(Protocol):
     """Structural type for sidebar strategy rows (``StrategyChoice`` in ``streamlit_app``).
 
-    Defined here to avoid importing the Streamlit module from panel code (circular import).
+    Uses read-only properties so frozen dataclasses (``frozen=True``) structurally match
+    (Pyright treats plain Protocol attributes as mutable, which conflicts with frozen fields).
     """
 
-    label: str
-    cls: Type[Strategy]
+    @property
+    def label(self) -> str: ...
+
+    @property
+    def cls(self) -> Type[Strategy]: ...
 
 
 def render_hypothesis_vs_final_panel(
-    p1_choice: _StrategyUIPick,
-    p2_choice: _StrategyUIPick,
+    p1_choice: StrategyUIPick,
+    p2_choice: StrategyUIPick,
     p1_params: Dict[str, Any],
     p2_params: Dict[str, Any],
     p1_prefs: Dict[str, int],
     p2_prefs: Dict[str, int],
     *,
-    build_strategy: Callable[[_StrategyUIPick, str, Dict[str, Any]], Strategy],
+    build_strategy: Callable[[StrategyUIPick, str, Dict[str, Any]], Strategy],
     live_base_gamestate: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Side-by-side hypothesis / final NE, joint-play table, optional ASCII export."""
