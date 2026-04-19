@@ -355,6 +355,31 @@ def hypothesis_joint_distribution(
     return (0.25, 0.25, 0.25, 0.25)
 
 
+def hypothesis_joint_distribution_for_joint_display(
+    hypothesis: NormalFormResult,
+    *,
+    mixed_index: int = 0,
+) -> Tuple[float, float, float, float]:
+    """Baseline joint probabilities for **Play vs expected** UI and ASCII joint tables.
+
+    When **pure** Nash equilibria exist, use a **uniform mixture over those pure cells**
+    (standard ``(1/n)`` on each equilibrium outcome). This matches common chicken intuition:
+    the two asymmetric equilibria each get equal expected weight, mutual swerve / mutual stay
+    are off-support unless they are themselves pure NE.
+
+    When there are **no** pure equilibria, fall back to :func:`hypothesis_joint_distribution`
+    (mixed selection, or uniform ``1/4``).
+    """
+    if hypothesis.pure_nash_indices:
+        n = len(hypothesis.pure_nash_indices)
+        pt = [0.0, 0.0, 0.0, 0.0]
+        for (i, j) in hypothesis.pure_nash_indices:
+            k = _joint_flat_index_from_row_col(int(i), int(j))
+            pt[k] += 1.0 / float(n)
+        return (pt[0], pt[1], pt[2], pt[3])
+    return hypothesis_joint_distribution(hypothesis, mixed_index=mixed_index)
+
+
 def joint_play_ratio_strings(
     counts: Sequence[int],
     expected_probs: Sequence[float],
@@ -381,15 +406,16 @@ def format_joint_play_vs_hypothesis_ascii(
     mixed_index: int = 0,
 ) -> str:
     """2×2 ASCII table: observed / expected frequency under hypothesis NE (i.i.d. per round)."""
-    probs = hypothesis_joint_distribution(hypothesis, mixed_index=mixed_index)
+    probs = hypothesis_joint_distribution_for_joint_display(hypothesis, mixed_index=mixed_index)
     ratios = joint_play_ratio_strings(counts, probs, n_rounds=n_rounds)
     exp_counts = [float(n_rounds) * float(p) for p in probs]
     lbl = hypothesis.action_labels
-    hyp_src = (
-        f"mixed[{mixed_index}]"
-        if hypothesis.mixed_equilibria
-        else ("pure mix" if hypothesis.pure_nash_indices else "uniform")
-    )
+    if hypothesis.pure_nash_indices:
+        hyp_src = f"uniform over {len(hypothesis.pure_nash_indices)} pure NE cell(s)"
+    elif hypothesis.mixed_equilibria:
+        hyp_src = f"mixed[{mixed_index}]"
+    else:
+        hyp_src = "uniform 1/4"
     w = max(6, max(len(r) for r in ratios) + 2)
     lines = [
         "=" * 62,

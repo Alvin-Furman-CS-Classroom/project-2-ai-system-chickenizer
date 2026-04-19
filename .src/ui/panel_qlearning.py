@@ -7,6 +7,8 @@ from typing import Optional
 
 import streamlit as st
 
+from ui.loading_indicator import loading_row
+
 from ql_strategy import QLearningStrategy
 from train_ql import OPPONENT_CHOICES, run_greedy_evaluation_episodes, train_ql_agent
 
@@ -88,7 +90,7 @@ def render_qlearning_panel() -> None:
 
         if st.button("Run Q-learning training", key="ql_train_btn"):
             demo = QLearningStrategy(ql_seat, seed=int(ql_seed))
-            with st.spinner("Training…"):
+            with loading_row("Training…"):
                 train_ql_agent(
                     demo,
                     opponent=ql_opp,
@@ -134,7 +136,7 @@ def render_qlearning_panel() -> None:
                     "Re-train with the seat you want, or switch the seat radio to match the agent."
                 )
             else:
-                with st.spinner("Evaluating (greedy)…"):
+                with loading_row("Evaluating (greedy)…"):
                     stats = run_greedy_evaluation_episodes(
                         agent,
                         ql_opp,

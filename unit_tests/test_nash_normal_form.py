@@ -288,6 +288,22 @@ class TestJointPlayVsHypothesis:
         assert p[2] == pytest.approx(0.5)
         assert p[3] == pytest.approx(0.0)
 
+    def test_joint_display_prefers_pure_uniform_when_pure_exists(self):
+        """UI / ASCII joint baseline: uniform over pure NE even if mixed equilibria also exist."""
+        hyp = nash_nf.NormalFormResult(
+            payoff_p1=[[0, 0], [0, 0]],
+            payoff_p2=[[0, 0], [0, 0]],
+            p1_strategy_name="X",
+            p2_strategy_name="Y",
+            pure_nash_indices=[(0, 1), (1, 0)],
+            mixed_equilibria=[((0.5, 0.5), (0.5, 0.5))],
+        )
+        p = nash_nf.hypothesis_joint_distribution_for_joint_display(hyp, mixed_index=0)
+        assert p[0] == pytest.approx(0.0)
+        assert p[1] == pytest.approx(0.5)
+        assert p[2] == pytest.approx(0.5)
+        assert p[3] == pytest.approx(0.0)
+
     def test_joint_ratio_on_equilibrium_path_is_one(self):
         counts = (2, 0, 0, 0)
         probs = (1.0, 0.0, 0.0, 0.0)

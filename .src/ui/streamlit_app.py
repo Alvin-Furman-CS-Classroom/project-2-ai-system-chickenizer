@@ -39,6 +39,7 @@ elif str(DOT_SRC) not in sys.path:
 from engine import GameEngine  # type: ignore  # noqa: E402
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
 from ui.arena_view import render_arena as _render_arena_view  # type: ignore  # noqa: E402
+from ui.loading_indicator import loading_row  # type: ignore  # noqa: E402
 from ui.panel_hypothesis_final import (  # type: ignore  # noqa: E402
     StrategyUIPick,
     render_hypothesis_vs_final_panel as _render_hypothesis_final_panel,
@@ -74,6 +75,23 @@ PREFERENCE_KEYS: Tuple[str, ...] = (
     "reputation_delta",
 )
 
+# MatchSession / engine ``game_over_reason`` strings → user-facing copy.
+_GAME_OVER_REASON_LABELS: Dict[str, str] = {
+    "max_rounds_reached": "Max rounds reached (round limit).",
+    "both_hp_zero": "Both players ran out of HP.",
+    "p1_hp_zero": "Player 1 ran out of HP.",
+    "p2_hp_zero": "Player 2 ran out of HP.",
+    "p2_resilience_tapout": "Player 2 tapped out (resilience fell too far behind).",
+    "p1_resilience_tapout": "Player 1 tapped out (resilience fell too far behind).",
+    "game_over": "Engine signaled game over.",
+}
+
+
+def _format_game_over_reason(reason: Optional[str]) -> str:
+    if not reason:
+        return "The match ended."
+    return _GAME_OVER_REASON_LABELS.get(reason, reason.replace("_", " ").strip().title())
+
 
 @dataclass(frozen=True)
 class StrategyChoice:
@@ -95,6 +113,39 @@ STRATEGIES: List[StrategyChoice] = [
     StrategyChoice("Minimax (resilience diff)", MinimaxStrategy),
     StrategyChoice("Q-learning (tabular)", QLearningStrategy),
 ]
+
+
+@dataclass(frozen=True)
+class MatchSidebarInput:
+    """Widget values collected from the match sidebar (one Screenlit run)."""
+
+    max_rounds: int
+    p1_choice: StrategyChoice
+    p2_choice: StrategyChoice
+    p1_params: Dict[str, Any]
+    p2_params: Dict[str, Any]
+    p1_prefs: Dict[str, int]
+    p2_prefs: Dict[str, int]
+    animate_arena: bool
+    animation_speed: int
+    return_hold_ms: int
+    return_speed_ms: int
+    start_new: bool
+    step_once: bool
+    autorun: bool
+
+
+# Auto-run chain: scale sidebar arena timings (~50% duration ⇒ ~2× faster motion + rerun cadence).
+_AUTORUN_ARENA_TIME_SCALE = 0.5
+
+
+def _arena_timings_for_autorun(sb: MatchSidebarInput, autorun_chain_active: bool) -> Tuple[int, int, int]:
+    """Return (duration_ms, hold_ms, return_ms); shorter when auto-run is stepping the match."""
+    d, h, r = sb.animation_speed, sb.return_hold_ms, sb.return_speed_ms
+    if not autorun_chain_active:
+        return d, h, r
+    k = _AUTORUN_ARENA_TIME_SCALE
+    return max(120, int(d * k)), max(100, int(h * k)), max(100, int(r * k))
 
 
 def _strategy_class_doc(cls: Type[Strategy]) -> str:
@@ -125,20 +176,19 @@ def _strategy_doc_hint(choice: StrategyChoice) -> None:
     )
 
 
-def _strategy_reference_expander() -> None:
-    """List every strategy with a native browser tooltip (class docstring)."""
-    with st.expander("All strategies — hover a name for its description", expanded=False):
-        items: List[str] = []
-        for sc in STRATEGIES:
-            t = _html_title_attr(_strategy_class_doc(sc.cls))
-            label = html.escape(sc.label)
-            items.append(
-                f'<li style="margin:0.3rem 0"><abbr title="{t}" style="cursor:help">{label}</abbr></li>'
-            )
-        st.markdown(
-            "<ul style='list-style:none;padding-left:0;margin:0'>" + "".join(items) + "</ul>",
-            unsafe_allow_html=True,
+def _render_strategy_reference_list() -> None:
+    """Strategy names with hover docstrings (render inside a parent expander)."""
+    items: List[str] = []
+    for sc in STRATEGIES:
+        t = _html_title_attr(_strategy_class_doc(sc.cls))
+        label = html.escape(sc.label)
+        items.append(
+            f'<li style="margin:0.25rem 0"><abbr title="{t}" style="cursor:help">{label}</abbr></li>'
         )
+    st.markdown(
+        "<ul style='list-style:none;padding-left:0;margin:0'>" + "".join(items) + "</ul>",
+        unsafe_allow_html=True,
+    )
 
 
 def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, Any]:
@@ -272,8 +322,7 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
 
     if cls is QLearningStrategy:
         st.caption(
-            "Trains automatically vs the **other** player’s strategy when you start a match, "
-            "then runs a short greedy eval. Live play is **greedy** (no further learning)."
+            "On **New game**: trains vs the other player’s strategy, short greedy eval, then **greedy** live play."
         )
         params["ql_training_episodes"] = int(
             st.number_input(
@@ -330,21 +379,17 @@ def _strategy_params_ui(label_prefix: str, choice: StrategyChoice) -> Dict[str, 
 
 
 def _preferences_ui(player: str, base: Dict[str, int]) -> Dict[str, int]:
-    """
-    Creates UI for player preferences.
-    Args:
-        player: The player identifier.
-        base: The base preferences.
-
-    Returns:
-        A dictionary of preferences.
-    """
-    st.caption(f'{player}\'s preference cares.')
+    """Vertical inputs for resilience preference weights (fits narrow sidebar)."""
     prefs: Dict[str, int] = {}
-    cols = st.columns(len(PREFERENCE_KEYS))
-    for i, key in enumerate(PREFERENCE_KEYS):
-        with cols[i]:
-            prefs[key] = int(st.number_input(f"{player} {key}", value=int(base.get(key, 0)), step=1, key=f"{player}_pref_{key}"))
+    for key in PREFERENCE_KEYS:
+        prefs[key] = int(
+            st.number_input(
+                f"{player} · {key}",
+                value=int(base.get(key, 0)),
+                step=1,
+                key=f"{player}_pref_{key}",
+            )
+        )
     return prefs
 
 
@@ -436,12 +481,12 @@ def _init_match(
         )
         return
     if isinstance(p1_strategy, QLearningStrategy):
-        with st.spinner("Training P1 Q-learning vs P2 (then greedy eval)…"):
+        with loading_row("Training P1 Q-learning vs P2 (then greedy eval)…"):
             _train_and_eval_ql_for_live_match(
                 p1_strategy, p2_strategy, agent_plays_p1=True, agent_params=p1_params
             )
     if isinstance(p2_strategy, QLearningStrategy):
-        with st.spinner("Training P2 Q-learning vs P1 (then greedy eval)…"):
+        with loading_row("Training P2 Q-learning vs P1 (then greedy eval)…"):
             _train_and_eval_ql_for_live_match(
                 p2_strategy, p1_strategy, agent_plays_p1=False, agent_params=p2_params
             )
@@ -460,20 +505,6 @@ def _advance_one_round() -> None:
     if match is None:
         return
     st.session_state["match"] = advance_one_round(match)
-
-
-def _advance_to_end() -> None:
-    """Advance until game over or round cap is reached."""
-    match: Optional[MatchSession] = st.session_state.get("match")
-    if match is None:
-        return
-    cur = match
-    while not cur.game_over:
-        nxt = advance_one_round(cur)
-        if nxt is cur:
-            break
-        cur = nxt
-    st.session_state["match"] = cur
 
 
 def _round_rows(engine: GameEngine) -> List[Dict[str, Any]]:
@@ -556,56 +587,90 @@ def _render_hypothesis_vs_final_panel(
 
 
 def _render_match_state(engine: GameEngine, p1_strategy: Strategy, p2_strategy: Strategy, last_round: Dict[str, Any]) -> None:
-    """Renders the match state.
-    Args:
-        engine: The game engine.
-        p1_strategy/p2_strategy: The strategies for the players.
-        last_round: The last round's action and outcome.
-    """
+    """Compact scoreboard + player strip (HP bars and last outcome)."""
     gs = engine.get_gamestate()
     p1_hp = int(gs.get("p1_hp", 0))
     p2_hp = int(gs.get("p2_hp", 0))
     max_hp = int(GameEngine.DEFAULT_HP)
     round_num = int(gs.get("round", 0))
 
-    # match header display
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Current round", round_num)
-    c2.metric("P1 HP", p1_hp)
-    c3.metric("P2 HP", p2_hp)
-    c4.metric("R1-R2", int(gs.get("resilience_diff", 0)))
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Round", round_num)
+    m2.metric("P1 HP", f"{p1_hp}/{max_hp}")
+    m3.metric("P2 HP", f"{p2_hp}/{max_hp}")
+    m4.metric("Resilience Δ", int(gs.get("resilience_diff", 0)))
 
-    # arena display, to be replaced with animation/graphics
-    st.subheader("Arena")
-    p1_col, mid_col, p2_col = st.columns([3, 2, 3])
+    p1_col, mid_col, p2_col = st.columns([1.15, 1, 1.15])
     with p1_col:
-        st.markdown("### P1")
-        st.markdown("🚗")
-        st.write(f"Strategy: `{p1_strategy.__class__.__name__}`")
-        st.write(f"Last action: `{last_round.get('p1_action') or 'n/a'}`")
+        st.markdown("**P1** 🚗")
+        st.caption(p1_strategy.__class__.__name__)
+        st.caption(f"Last: **{last_round.get('p1_action') or '—'}**")
         st.progress(max(0.0, min(1.0, p1_hp / max_hp)))
-        st.caption(f"HP: {p1_hp}/{max_hp}")
-        st.write("Cares:", gs.get("p1_preferences", {}))
     with mid_col:
-        st.markdown("### VS")
-        st.write("Last round outcome")
         outcome = last_round.get("outcome")
+        st.caption("Last outcome")
         if outcome is None:
-            st.info("No completed rounds yet")
+            st.markdown("#### —")
+            st.caption("No rounds yet")
         elif outcome == "CRASH":
-            st.error("CRASH")
+            st.markdown("#### 💥 **Crash**")
         elif outcome == "TIE":
-            st.warning("TIE")
+            st.markdown("#### **Tie**")
+        elif outcome == "P1":
+            st.markdown("#### **P1 wins**")
+        elif outcome == "P2":
+            st.markdown("#### **P2 wins**")
         else:
-            st.success(str(outcome))
+            st.markdown(f"#### **{html.escape(str(outcome))}**")
     with p2_col:
-        st.markdown("### P2")
-        st.markdown("🏎️")
-        st.write(f"Strategy: `{p2_strategy.__class__.__name__}`")
-        st.write(f"Last action: `{last_round.get('p2_action') or 'n/a'}`")
+        st.markdown("**P2** 🏎️")
+        st.caption(p2_strategy.__class__.__name__)
+        st.caption(f"Last: **{last_round.get('p2_action') or '—'}**")
         st.progress(max(0.0, min(1.0, p2_hp / max_hp)))
-        st.caption(f"HP: {p2_hp}/{max_hp}")
-        st.write("Cares:", gs.get("p2_preferences", {}))
+
+    with st.expander("Resilience weight dicts (merged cares)", expanded=False):
+        st.json(
+            {
+                "p1_preferences": gs.get("p1_preferences", {}),
+                "p2_preferences": gs.get("p2_preferences", {}),
+            }
+        )
+
+
+def _render_game_over_callout(reason: Optional[str]) -> None:
+    """Prominent, colored banner so the match outcome is easy to spot on the Arena tab."""
+    reason_html = html.escape(_format_game_over_reason(reason))
+    st.markdown(
+        f"""
+<div style="
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 42%, #4c1d95 78%, #78350f 100%);
+  border: 2px solid #fbbf24;
+  border-radius: 14px;
+  padding: 1.05rem 1.3rem;
+  margin: 0.65rem 0 1rem 0;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(251, 191, 36, 0.25) inset;
+">
+  <div style="
+    color: #fef08a;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    margin-bottom: 0.4rem;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  ">Game over</div>
+  <div style="
+    color: #e2e8f0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.5;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  ">{reason_html}</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def _render_arena(
     last_round: Dict[str, Any],
@@ -654,92 +719,180 @@ def _close_ui() -> None:
     st.stop()
 
 
-def main() -> None:
-    st.set_page_config(page_title="Chickenizer Live Match", layout="wide")
-    st.title("Chickenizer - Live Match")
-    st.write("Run the game one round at a time and watch the players react.")
-
+def _render_match_sidebar() -> MatchSidebarInput:
+    """Collect match controls in a grouped, scroll-friendly sidebar."""
     with st.sidebar:
-        st.header("Match setup")
-        max_rounds = int(st.slider("Max rounds", min_value=1, max_value=50, value=10))
-
-        st.subheader("P1 strategy")
-        p1_choice = st.selectbox("P1 strategy", options=STRATEGIES, format_func=lambda c: c.label, index=2, key="p1_strategy_choice")
-        _strategy_doc_hint(p1_choice)
-        p1_params = _strategy_params_ui("P1", p1_choice)
-
-        st.subheader("P2 strategy")
-        p2_choice = st.selectbox("P2 strategy", options=STRATEGIES, format_func=lambda c: c.label, index=2, key="p2_strategy_choice")
-        _strategy_doc_hint(p2_choice)
-        p2_params = _strategy_params_ui("P2", p2_choice)
-
-        _strategy_reference_expander()
-
-        st.subheader("Player preferences (cares)")
-        defaults = GameEngine.DEFAULT_GAMESTATE
-        p1_prefs = _preferences_ui("p1", defaults.get("p1_preferences", {}))
-        p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
-
-        animate_arena = st.checkbox("Enable arena animation", value=True, key="animate_arena")
-        # Defaults so main-body ``_render_arena`` always sees bound names (pyright).
-        animation_speed = 700
-        return_hold_ms = 1200
-        return_speed_ms = 350
-        if animate_arena:
-            animation_speed = int(
-                st.slider("Animation speed (ms)", min_value=200, max_value=1500, value=700, step=50, key="arena_anim_ms")
+        st.header("Match")
+        max_rounds = int(
+            st.slider(
+                "Round limit",
+                min_value=1,
+                max_value=50,
+                value=10,
+                help="Maximum completed rounds per game.",
             )
-            return_hold_ms = int(
-                st.slider("Hold at action before reset (ms)", min_value=0, max_value=2500, value=1200, step=100, key="arena_hold_ms")
-            )
-            return_speed_ms = int(
-                st.slider("Return-to-idle speed (ms)", min_value=100, max_value=1200, value=350, step=50, key="arena_return_ms")
-            )
-        start_new = st.button("Start New Game", type="primary", use_container_width=True)
-        match: Optional[MatchSession] = st.session_state.get("match")
-        step_disabled = bool(
-            match is None or bool(match.game_over)
         )
-        autorun = st.checkbox(
-            "Auto-run to end when playing",
-            value=False,
-            key="autorun_to_end",
-            help="When enabled, pressing the play button simulates all remaining rounds.",
-        )
-        play_label = "Run To End" if autorun else "Play Next Round"
-        step_once = st.button(play_label, use_container_width=True, disabled=step_disabled)
+
+        tp1, tp2 = st.tabs(["Player 1", "Player 2"])
+        with tp1:
+            p1_choice = st.selectbox(
+                "Strategy",
+                options=STRATEGIES,
+                format_func=lambda c: c.label,
+                index=2,
+                key="p1_strategy_choice",
+            )
+            _strategy_doc_hint(p1_choice)
+            p1_params = _strategy_params_ui("P1", p1_choice)
+        with tp2:
+            p2_choice = st.selectbox(
+                "Strategy",
+                options=STRATEGIES,
+                format_func=lambda c: c.label,
+                index=2,
+                key="p2_strategy_choice",
+            )
+            _strategy_doc_hint(p2_choice)
+            p2_params = _strategy_params_ui("P2", p2_choice)
+
+        with st.expander("Resilience weights (cares)", expanded=False):
+            st.caption("Per-round contributions to resilience (see `GameEngine.DEFAULT_GAMESTATE`).")
+            defaults = GameEngine.DEFAULT_GAMESTATE
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                st.markdown("**P1**")
+                p1_prefs = _preferences_ui("p1", defaults.get("p1_preferences", {}))
+            with pc2:
+                st.markdown("**P2**")
+                p2_prefs = _preferences_ui("p2", defaults.get("p2_preferences", {}))
+
+        with st.expander("Arena motion", expanded=False):
+            animate_arena = st.checkbox("Animate arena", value=True, key="animate_arena")
+            animation_speed = 700
+            return_hold_ms = 1200
+            return_speed_ms = 350
+            if animate_arena:
+                animation_speed = int(
+                    st.slider("Speed (ms)", 200, 1500, 700, 50, key="arena_anim_ms")
+                )
+                return_hold_ms = int(
+                    st.slider("Hold (ms)", 0, 2500, 1200, 100, key="arena_hold_ms")
+                )
+                return_speed_ms = int(
+                    st.slider("Return (ms)", 100, 1200, 350, 50, key="arena_return_ms")
+                )
+
+        with st.expander("Strategy catalog", expanded=False):
+            _render_strategy_reference_list()
 
         st.divider()
-        # close app section
-        st.subheader("App control")
-        allow_shutdown = st.checkbox(
-            "Please click this checkbox to confirm you're done playing.",
+        # Prime match before play button so first paint and "New game" same-run aren't stuck disabled:
+        # ``main()`` used to init only after the sidebar, so ``match`` was None or still ``game_over``.
+        if st.session_state.get("match") is None:
+            _init_match(
+                p1_choice,
+                p2_choice,
+                p1_params,
+                p2_params,
+                p1_prefs,
+                p2_prefs,
+                max_rounds,
+            )
+
+        autorun = st.checkbox(
+            "Auto-run to end",
             value=False,
-            key="allow_shutdown",
+            key="autorun_to_end",
+            help="Play button runs all remaining rounds in one go.",
         )
-        shutdown_now = st.button("Shutdown App", type="secondary", use_container_width=True)
-        if shutdown_now and allow_shutdown:
-            if match is not None:
-                st.session_state["match"] = replace(match, shutdown_requested=True)
-            _close_ui()
-        elif shutdown_now and not allow_shutdown:
-            st.error("Please click the checkbox to confirm you're done playing.")
+        play_label = "Run to end" if autorun else "Next round"
+        b1, b2 = st.columns(2)
+        with b1:
+            start_new = st.button("New game", type="primary", use_container_width=True)
+        match_for_step: Optional[MatchSession] = st.session_state.get("match")
+        step_disabled = bool(
+            match_for_step is None
+            or (bool(match_for_step.game_over) and not start_new)
+        )
+        with b2:
+            step_once = st.button(play_label, use_container_width=True, disabled=step_disabled)
 
-    if start_new:
-        _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
-    elif st.session_state.get("match") is None:
-        _init_match(p1_choice, p2_choice, p1_params, p2_params, p1_prefs, p2_prefs, max_rounds)
+        with st.expander("Shutdown", expanded=False):
+            allow_shutdown = st.checkbox("Confirm exit", value=False, key="allow_shutdown")
+            shutdown_now = st.button("Quit app", type="secondary", use_container_width=True)
+            if shutdown_now and allow_shutdown:
+                _m = st.session_state.get("match")
+                if _m is not None:
+                    st.session_state["match"] = replace(_m, shutdown_requested=True)
+                _close_ui()
+            elif shutdown_now and not allow_shutdown:
+                st.caption("Check **Confirm exit** first.")
 
-    if step_once:
-        if st.session_state.get("autorun_to_end", False):
-            _advance_to_end()
+    return MatchSidebarInput(
+        max_rounds=max_rounds,
+        p1_choice=p1_choice,
+        p2_choice=p2_choice,
+        p1_params=p1_params,
+        p2_params=p2_params,
+        p1_prefs=p1_prefs,
+        p2_prefs=p2_prefs,
+        animate_arena=animate_arena,
+        animation_speed=animation_speed,
+        return_hold_ms=return_hold_ms,
+        return_speed_ms=return_speed_ms,
+        start_new=start_new,
+        step_once=step_once,
+        autorun=autorun,
+    )
+
+
+def main() -> None:
+    st.set_page_config(page_title="Chickenizer Live Match", layout="wide")
+    st.title("Chickenizer")
+    st.caption("Sequential Chicken · one round per step · Nash snapshot updates with live state.")
+
+    sb = _render_match_sidebar()
+
+    if sb.start_new:
+        st.session_state.pop("_autorun_chain", None)
+        _init_match(
+            sb.p1_choice,
+            sb.p2_choice,
+            sb.p1_params,
+            sb.p2_params,
+            sb.p1_prefs,
+            sb.p2_prefs,
+            sb.max_rounds,
+        )
+
+    if sb.step_once:
+        if sb.autorun:
+            st.session_state["_autorun_chain"] = True
         else:
             _advance_one_round()
 
     match2: Optional[MatchSession] = st.session_state.get("match")
     if match2 is None:
         st.error(
-            "No active match. Adjust strategies (only one side may be Q-learning) and click **Start New Game**."
+            "No active match. If both players were Q-learning, pick a fixed strategy for one side, "
+            "then click **New game**."
+        )
+        return
+
+    # Auto-run: one round per Streamlit run so the arena iframe reloads and animates each step.
+    if st.session_state.get("_autorun_chain"):
+        if not sb.autorun:
+            st.session_state.pop("_autorun_chain", None)
+        elif match2.game_over:
+            st.session_state.pop("_autorun_chain", None)
+        else:
+            st.session_state["match"] = advance_one_round(match2)
+            match2 = st.session_state.get("match")
+
+    if match2 is None:
+        st.error(
+            "No active match. If both players were Q-learning, pick a fixed strategy for one side, "
+            "then click **New game**."
         )
         return
     engine: GameEngine = match2.engine
@@ -747,43 +900,64 @@ def main() -> None:
     p2_strategy: Strategy = match2.p2_strategy
     last_round = match2.last_round
 
-    _render_match_state(engine, p1_strategy, p2_strategy, last_round)
-    if animate_arena:
-        _render_arena(
-            last_round=last_round,
-            game_over=bool(match2.game_over),
-            duration_ms=animation_speed,
-            hold_ms=return_hold_ms,
-            return_ms=return_speed_ms,
-            action_nonce=int(match2.arena_action_nonce),
+    _autorun_chain_active = bool(st.session_state.get("_autorun_chain") and sb.autorun)
+    arena_dur_ms, arena_hold_ms, arena_ret_ms = _arena_timings_for_autorun(sb, _autorun_chain_active)
+
+    tab_arena, tab_nash, tab_charts = st.tabs(["Arena", "Nash & joint play", "History & charts"])
+    with tab_arena:
+        _render_match_state(engine, p1_strategy, p2_strategy, last_round)
+        if sb.animate_arena:
+            _render_arena(
+                last_round=last_round,
+                game_over=bool(match2.game_over),
+                duration_ms=arena_dur_ms,
+                hold_ms=arena_hold_ms,
+                return_ms=arena_ret_ms,
+                action_nonce=int(match2.arena_action_nonce),
+            )
+        if match2.game_over:
+            _render_game_over_callout(match2.game_over_reason)
+        elif sb.autorun:
+            st.caption(
+                "Run to end plays one round at a time with arena animation until the match stops. "
+                "Uncheck Auto-run to end to step manually."
+            )
+        else:
+            st.caption("Use **Next round** in the sidebar to advance one round.")
+
+    with tab_nash:
+        _render_hypothesis_vs_final_panel(
+            sb.p1_choice,
+            sb.p2_choice,
+            sb.p1_params,
+            sb.p2_params,
+            sb.p1_prefs,
+            sb.p2_prefs,
         )
 
-    _render_hypothesis_vs_final_panel(
-        p1_choice,
-        p2_choice,
-        p1_params,
-        p2_params,
-        p1_prefs,
-        p2_prefs,
-    )
+    with tab_charts:
+        rows = _round_rows(engine)
+        st.subheader("Round log")
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+        if rows:
+            st.subheader("Trends")
+            c_hp, c_res = st.columns(2)
+            with c_hp:
+                st.line_chart(rows, x="round", y=["p1_hp", "p2_hp"])
+            with c_res:
+                st.line_chart(rows, x="round", y=["p1_resilience", "p2_resilience", "resilience_diff"])
+        _render_qlearning_panel()
 
-    if match2.game_over:
-        st.warning(f"Game over: `{match2.game_over_reason}`")
-    else:
-        if st.session_state.get("autorun_to_end", False):
-            st.info("Press **Run To End** to simulate remaining rounds.")
-        else:
-            st.info("Press **Play Next Round** to continue.")
-
-    rows = _round_rows(engine)
-    st.subheader("Round history")
-    st.dataframe(rows, use_container_width=True)
-    if rows:
-        st.subheader("Trends")
-        st.line_chart(rows, x="round", y=["p1_hp", "p2_hp"])
-        st.line_chart(rows, x="round", y=["p1_resilience", "p2_resilience", "resilience_diff"])
-
-    _render_qlearning_panel()
+    if (
+        st.session_state.get("_autorun_chain")
+        and sb.autorun
+        and match2 is not None
+        and not match2.game_over
+    ):
+        # Let the browser finish one full arena cycle before the next rerun (matches scaled timings above).
+        delay_s = (arena_dur_ms + arena_hold_ms + arena_ret_ms) / 1000.0
+        time.sleep(max(0.05, delay_s))
+        st.rerun()
 
 
 if __name__ == "__main__":
