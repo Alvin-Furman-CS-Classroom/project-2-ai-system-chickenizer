@@ -29,7 +29,7 @@ Next Module Feed:
 
 # Dependencies:
 import sympy as sp
-from typing import Optional, List
+from typing import Any, Callable, List, Optional, cast
 from dataclasses import dataclass
 
 # No-op logger: ignores all logging when kb_logger cannot be loaded
@@ -65,7 +65,13 @@ except (ImportError, FileNotFoundError, OSError):
         else:
             _log_mod = importlib.util.module_from_spec(_spec)
             _spec.loader.exec_module(_log_mod)
-            _logger = _log_mod.get_debug_logger("module1_kb")
+            # Dynamic import: attribute access trips pyright ``ModuleType.__getattr__``; cast factory.
+            _factory = getattr(_log_mod, "get_debug_logger", None)
+            if _factory is None:
+                _logger = _NoOpLogger()
+            else:
+                _dbg_factory = cast(Callable[[str], Any], _factory)
+                _logger = _dbg_factory("module1_kb")
     # ensure no crashes occur if debug_logger.py is not found
     except (ImportError, FileNotFoundError, OSError):
         _logger = _NoOpLogger()
