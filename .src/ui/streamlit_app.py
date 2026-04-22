@@ -38,7 +38,11 @@ elif str(DOT_SRC) not in sys.path:
 
 from engine import GameEngine  # type: ignore  # noqa: E402
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
-from ui.arena_view import render_arena as _render_arena_view  # type: ignore  # noqa: E402
+from ui.arena_view import (  # type: ignore  # noqa: E402
+    _ARENA_IFRAME_HEIGHT_PX,
+    _ARENA_IFRAME_WIDTH_PX,
+    build_arena_html,
+)
 from ui.loading_indicator import loading_row  # type: ignore  # noqa: E402
 from ui.panel_hypothesis_final import (  # type: ignore  # noqa: E402
     StrategyUIPick,
@@ -497,6 +501,8 @@ def _init_match(
         p2_cares=p2_prefs,
         max_rounds=max_rounds,
     )
+    # Unique per match so the arena iframe never reuses DOM / keyframe names after New game.
+    st.session_state["_arena_frame_id"] = int(st.session_state.get("_arena_frame_id", 0)) + 1
 
 
 def _advance_one_round() -> None:
@@ -679,16 +685,30 @@ def _render_arena(
     hold_ms: int = 1200,
     return_ms: int = 350,
     action_nonce: int = 0,
+    *,
+    frame_id: int = 0,
 ) -> None:
-    """Delegate arena rendering to modular HTML/CSS helper."""
-    _render_arena_view(
-        last_round=last_round,
-        game_over=game_over,
+    """Render the arena iframe (call inside ``with tab_arena:``).
+
+    Uses ``st.empty()`` so each auto-run rerun replaces one slot instead of stacking iframes.
+    """
+    html_s = build_arena_html(
+        last_round,
+        game_over,
         duration_ms=duration_ms,
         hold_ms=hold_ms,
         return_ms=return_ms,
         action_nonce=action_nonce,
+        frame_id=frame_id,
     )
+    arena_slot = st.empty()
+    with arena_slot:
+        components.html(
+            html_s,
+            width=_ARENA_IFRAME_WIDTH_PX,
+            height=_ARENA_IFRAME_HEIGHT_PX,
+            scrolling=False,
+        )
 
 
 def _close_ui() -> None:
@@ -786,19 +806,8 @@ def _render_match_sidebar() -> MatchSidebarInput:
             _render_strategy_reference_list()
 
         st.divider()
-        # Prime match before play button so first paint and "New game" same-run aren't stuck disabled:
-        # ``main()`` used to init only after the sidebar, so ``match`` was None or still ``game_over``.
-        if st.session_state.get("match") is None:
-            _init_match(
-                p1_choice,
-                p2_choice,
-                p1_params,
-                p2_params,
-                p1_prefs,
-                p2_prefs,
-                max_rounds,
-            )
-
+        # Read ``start_new`` before auto-init so ``_init_match`` is not invoked twice when ``match`` is
+        # None and **New game** is clicked (that path re-trained Q-learning and confused arena iframes).
         autorun = st.checkbox(
             "Auto-run to end",
             value=False,
@@ -809,6 +818,17 @@ def _render_match_sidebar() -> MatchSidebarInput:
         b1, b2 = st.columns(2)
         with b1:
             start_new = st.button("New game", type="primary", use_container_width=True)
+        if st.session_state.get("match") is None and not start_new:
+            _init_match(
+                p1_choice,
+                p2_choice,
+                p1_params,
+                p2_params,
+                p1_prefs,
+                p2_prefs,
+                max_rounds,
+            )
+
         match_for_step: Optional[MatchSession] = st.session_state.get("match")
         step_disabled = bool(
             match_for_step is None
@@ -848,6 +868,8 @@ def _render_match_sidebar() -> MatchSidebarInput:
 
 def main() -> None:
     st.set_page_config(page_title="Chickenizer Live Match", layout="wide")
+    # Old sessions may hold a stale ``st.empty()`` ref; never reuse it across runs.
+    st.session_state.pop("_arena_iframe_slot", None)
     st.title("Chickenizer")
     st.caption("Sequential Chicken · one round per step · Nash snapshot updates with live state.")
 
@@ -914,6 +936,7 @@ def main() -> None:
                 hold_ms=arena_hold_ms,
                 return_ms=arena_ret_ms,
                 action_nonce=int(match2.arena_action_nonce),
+                frame_id=int(st.session_state.get("_arena_frame_id", 0)),
             )
         if match2.game_over:
             _render_game_over_callout(match2.game_over_reason)

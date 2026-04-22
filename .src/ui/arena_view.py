@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import streamlit as st
 import streamlit.components.v1 as components
 
 # Iframe width for ``components.html`` (Streamlit defaults are narrow); wide layout uses most of the main pane.
@@ -11,15 +12,21 @@ _ARENA_IFRAME_WIDTH_PX = 1600
 _ARENA_IFRAME_HEIGHT_PX = 320
 
 
-def render_arena(
+def build_arena_html(
     last_round: Dict[str, Any],
     game_over: bool,
     duration_ms: int = 700,
     hold_ms: int = 1200,
     return_ms: int = 350,
     action_nonce: int = 0,
-) -> None:
-    """Render a simple HTML/CSS animated arena scene."""
+    *,
+    frame_id: int = 0,
+) -> str:
+    """Build HTML/CSS/JS for the animated arena (no Streamlit I/O).
+
+    ``frame_id`` increments on each **New game** so iframe DOM / keyframes never
+    collide with a previous match (``action_nonce`` resets to 0 each match).
+    """
     p1_action = last_round.get("p1_action")
     p2_action = last_round.get("p2_action")
     raw_outcome = (last_round.get("outcome") or "").strip()
@@ -27,7 +34,8 @@ def render_arena(
     # Initial match / new game: show arena but do not run car motion until a round exists.
     has_completed_round = bool(outcome)
 
-    nonce_suffix = str(action_nonce)
+    uid = f"{int(frame_id)}_{int(action_nonce)}"
+    nonce_suffix = uid
     flash_class = "flash-crash" if outcome == "CRASH" else ""
     if not outcome:
         outcome_text = "No completed rounds yet"
@@ -61,8 +69,8 @@ def render_arena(
         p1_vec = "crash"
         p2_vec = "crash"
 
-    boom_name = f"boom_{int(action_nonce)}"
-    arena_html = f"""
+    boom_name = f"boom_{uid.replace('-', '_')}"
+    return f"""
     <style>
       html, body {{
         margin: 0;
@@ -144,7 +152,7 @@ def render_arena(
     </style>
 
     <div class="arena-wrap">
-    <div class="arena arena-{action_nonce}" id="arena-{nonce_suffix}">
+    <div class="arena arena-{nonce_suffix}" id="arena-{nonce_suffix}">
       <div class="outcome {outcome_class}">{outcome_text}</div>
       <div class="car p1" id="p1-{nonce_suffix}">🚗</div>
       <div class="car p2" id="p2-{nonce_suffix}">🏎️</div>
@@ -233,10 +241,33 @@ def render_arena(
       }})();
     </script>
     """
-    components.html(
-        arena_html,
-        width=_ARENA_IFRAME_WIDTH_PX,
-        height=_ARENA_IFRAME_HEIGHT_PX,
-        scrolling=False,
-    )
 
+
+def render_arena(
+    last_round: Dict[str, Any],
+    game_over: bool,
+    duration_ms: int = 700,
+    hold_ms: int = 1200,
+    return_ms: int = 350,
+    action_nonce: int = 0,
+    *,
+    frame_id: int = 0,
+) -> None:
+    """Render a simple HTML/CSS animated arena scene (direct ``components.html``)."""
+    arena_html = build_arena_html(
+        last_round,
+        game_over,
+        duration_ms=duration_ms,
+        hold_ms=hold_ms,
+        return_ms=return_ms,
+        action_nonce=action_nonce,
+        frame_id=frame_id,
+    )
+    arena_slot = st.empty()
+    with arena_slot:
+        components.html(
+            arena_html,
+            width=_ARENA_IFRAME_WIDTH_PX,
+            height=_ARENA_IFRAME_HEIGHT_PX,
+            scrolling=False,
+        )

@@ -44,44 +44,49 @@ def render_hypothesis_vs_final_panel(
     live_base_gamestate: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Side-by-side hypothesis / final NE, joint-play table, optional ASCII export."""
-    st.subheader("One-shot Nash vs. this match")
-    st.caption(
-        "Two small **what-if** tables (not a forecast of the whole match). **Hypothesis** = built like a "
-        "brand-new game; **Final** = built from **right now** in your match. Gold boxes mark stable "
-        "one-shot choices (pure Nash cells)."
+    st.markdown(
+        "<h2 style='margin:0 0 0.4rem 0;font-size:1.38rem;font-weight:800;"
+        "letter-spacing:-0.02em;line-height:1.25;color:inherit;'>"
+        "One-shot Nash vs. this match</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='margin:0 0 1rem 0;font-size:1.05rem;line-height:1.6;color:inherit;max-width:52rem;'>"
+        "Two small <strong>what-if</strong> tables (not a forecast of the whole match). "
+        "<strong>Hypothesis</strong> = built like a brand-new game; <strong>Final</strong> = built from "
+        "<strong>right now</strong> in your match. Gold boxes mark stable one-shot choices (pure Nash cells)."
+        "</p>",
+        unsafe_allow_html=True,
     )
     with st.expander("What you’re looking at (read once)", expanded=False):
         st.markdown(
             """
-Each payoff cell asks: *if both players picked those two moves for one round*, what would each
-player’s **resilience** be afterward—using the strategy weights and the **cares** sliders from the sidebar.
-
-- **Hypothesis** table: same idea as **before any rounds** in a fresh game.
-- **Final** table: same math, but using **today’s** HP/resilience from the live match, so the “best
-  responses” can move.
-- **Nash / NE** here means “if both picked their moves **at the same time** once, who would want to
-  change?”—not the long back-and-forth of the arena.
-
-**Colors** use one scale for both tables: **P1 edge** = P1’s resilience minus P2’s in that cell (not
-“who is winning overall”).
-
-**Play vs expected** (after at least one round): we count how many times each **pair** of moves
-happened in your match, and compare to a **chicken-style baseline**: when the hypothesis game has
-pure Nash equilibria, we spread expected probability **evenly across those pure cells** (so the two
-classic asymmetric outcomes get the same expected weight). **Cell color** = how <strong>surprising</strong>
-that count is vs that baseline: pale ≈ on target, <strong>intense red</strong> = far <em>more</em> often
-than expected (e.g. lots of mutual swerve when the baseline puts no weight there), <strong>intense blue</strong>
-= far <em>less</em> often than expected. **Stay/stay** is only “on baseline” if mutual stay is itself one
-of those pure cells; otherwise a long crash streak reads as very surprising (red). Ratios near **1** in the
-text mean “about on target.”
-
-**Why you might see `>∞`:** the baseline can assign **almost no** probability to a pair (for example,
-only pure equilibria on other cells). If you still saw that pair at least once, dividing “what we saw”
-by “almost zero expected” would look like infinity, so we show **`>∞`** to mean **“way above what the
-baseline guessed.”** If you saw **zero** times and the baseline also expects **zero**, we show **—**.
-
-**ASCII export** matches the `nash_normal_form` CLI helpers for reports.
-            """.strip()
+<div style="font-size:1.05rem;line-height:1.65;color:inherit;max-width:52rem;">
+<p style="margin:0 0 0.85rem 0;">Each payoff cell asks: <em>if both players picked those two moves for one
+round</em>, what would each player’s <strong>resilience</strong> be afterward—using the strategy weights
+and the <strong>cares</strong> sliders from the sidebar.</p>
+<ul style="margin:0 0 0.85rem 1.1rem;padding:0;">
+<li><strong>Hypothesis</strong> table: same idea as <strong>before any rounds</strong> in a fresh game.</li>
+<li><strong>Final</strong> table: same math, but using <strong>today’s</strong> HP/resilience from the live match,
+so the “best responses” can move.</li>
+<li><strong>Nash / NE</strong> here means “if both picked their moves <strong>at the same time</strong> once,
+who would want to change?”—not the long back-and-forth of the arena.</li>
+</ul>
+<p style="margin:0 0 0.85rem 0;"><strong>Colors</strong> use one scale for both tables: <strong>P1 edge</strong>
+= P1’s resilience minus P2’s in that cell (not “who is winning overall”).</p>
+<p style="margin:0 0 0.85rem 0;"><strong>Play vs expected</strong> (after at least one round): we count how
+many times each <strong>pair</strong> of moves happened in your match, and compare to a
+<strong>chicken-style baseline</strong>: when the hypothesis game has pure Nash equilibria, we spread expected
+probability <strong>evenly across those pure cells</strong>. <strong>Cell color</strong> = how surprising that count is
+vs that baseline: pale ≈ on target, <strong>strong red</strong> = far more often than expected,
+<strong>strong blue</strong> = far less often than expected.</p>
+<p style="margin:0 0 0.85rem 0;"><strong>Why you might see <code>&gt;∞</code>:</strong> the baseline can assign almost no
+probability to a pair. If you still saw that pair at least once, we label the ratio <code>&gt;∞</code>.
+If you saw <strong>zero</strong> times and the baseline also expects <strong>zero</strong>, we show <strong>—</strong>.</p>
+<p style="margin:0;"><strong>ASCII export</strong> matches the <code>nash_normal_form</code> CLI helpers for reports.</p>
+</div>
+            """.strip(),
+            unsafe_allow_html=True,
         )
 
     p1s = build_strategy(p1_choice, "p1", p1_params)
@@ -104,10 +109,17 @@ baseline guessed.”** If you saw **zero** times and the baseline also expects *
             "**numpy**). You still get pure-equilibrium outlines when they exist."
         )
 
-    st.markdown("##### Payoff tables & equilibria")
-    st.caption(
-        "Side by side: **hypothesis** (fresh start) vs **final** (current match). Each number is "
-        "resilience **after that one joint move**, not your running total from the arena."
+    st.markdown(
+        "<h3 style='margin:1rem 0 0.35rem 0;font-size:1.15rem;font-weight:700;color:inherit;'>"
+        "Payoff tables &amp; equilibria</h3>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='margin:0 0 0.75rem 0;font-size:1.02rem;line-height:1.55;color:inherit;max-width:52rem;'>"
+        "Side by side: <strong>hypothesis</strong> (fresh start) vs <strong>final</strong> (current match). "
+        "Each number is resilience <strong>after that one joint move</strong>, not your running total from the arena."
+        "</p>",
+        unsafe_allow_html=True,
     )
 
     n_mixed = len(hyp.mixed_equilibria)
@@ -129,9 +141,12 @@ baseline guessed.”** If you saw **zero** times and the baseline also expects *
             )
         )
     elif hyp.pure_nash_indices:
-        st.caption(
-            "**Play vs expected** uses a **uniform mix over pure Nash** cells of the hypothesis game "
-            "(e.g. each asymmetric chicken equilibrium gets equal expected weight when both are pure NE)."
+        st.markdown(
+            "<p style='margin:0 0 0.75rem 0;font-size:1rem;line-height:1.55;color:inherit;max-width:52rem;'>"
+            "<strong>Play vs expected</strong> uses a <strong>uniform mix over pure Nash</strong> cells of the "
+            "hypothesis game (e.g. each asymmetric chicken equilibrium gets equal expected weight when both "
+            "are pure NE).</p>",
+            unsafe_allow_html=True,
         )
 
     grids = hypothesis_final_side_by_side_html(
@@ -142,20 +157,17 @@ baseline guessed.”** If you saw **zero** times and the baseline also expects *
     )
     st.markdown(grids, unsafe_allow_html=True)
 
-    st.markdown(
-        "<p style='color:#0369a1;font-size:1.28rem;font-weight:800;margin:1.15rem 0 0.35rem;"
-        "line-height:1.25;font-family:system-ui,Segoe UI,sans-serif'>"
-        "Play vs expected</p>",
-        unsafe_allow_html=True,
-    )
     if payload.joint_error:
         st.warning(f"Joint-frequency table: {payload.joint_error}")
     elif payload.joint_counts is not None and payload.n_rounds > 0:
-        st.caption(
-            f"Using **{payload.n_rounds}** finished round(s). Each cell: how many times that **pair** of "
-            "moves happened, then a ratio **≈ 1** means “about as often as the hypothesis baseline expects.” "
-            "**>∞** means the baseline treated that pair as nearly impossible, but it still happened—open "
-            "**What you’re looking at** above for the full story. **—** means zero seen and ~zero expected."
+        st.markdown(
+            f"<p style='margin:0 0 0.75rem 0;font-size:1rem;line-height:1.55;color:inherit;max-width:52rem;'>"
+            f"Using <strong>{payload.n_rounds}</strong> finished round(s). Each cell: how many times that "
+            f"<strong>pair</strong> of moves happened, then a ratio <strong>≈ 1</strong> means about as often as "
+            f"the hypothesis baseline expects. <code>&gt;∞</code> means the baseline treated that pair as nearly "
+            f"impossible, but it still happened—open <strong>What you’re looking at</strong> above for the full "
+            f"story. <strong>—</strong> means zero seen and ~zero expected.</p>",
+            unsafe_allow_html=True,
         )
         jp = joint_play_vs_hypothesis_html(
             payload.joint_counts,

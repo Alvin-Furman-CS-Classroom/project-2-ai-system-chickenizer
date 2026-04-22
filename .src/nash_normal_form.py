@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+import warnings
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 try:
@@ -272,7 +273,15 @@ def find_mixed_nash(
     seen: set[Tuple[Tuple[float, float], Tuple[float, float]]] = set()
     result: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
     # nashpy stubs are incomplete; cast so unpack + ndarray handling type-check.
-    equilibria = cast(Iterable[Tuple[Any, Any]], game.support_enumeration())
+    # Degenerate 2×2 games can emit RuntimeWarning (even # of equilibria); safe to ignore here.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*equilibria was returned.*",
+            category=RuntimeWarning,
+            module=r"nashpy\.algorithms\.support_enumeration",
+        )
+        equilibria = cast(Iterable[Tuple[Any, Any]], game.support_enumeration())
     for sigma, rho in equilibria:
         sig_t = _mixed_probs_to_pair(sigma)
         rho_t = _mixed_probs_to_pair(rho)
