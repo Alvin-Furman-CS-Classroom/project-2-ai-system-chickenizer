@@ -38,11 +38,7 @@ elif str(DOT_SRC) not in sys.path:
 
 from engine import GameEngine  # type: ignore  # noqa: E402
 from match_session import MatchSession, advance_one_round, init_match_session  # type: ignore  # noqa: E402
-from ui.arena_view import (  # type: ignore  # noqa: E402
-    _ARENA_IFRAME_HEIGHT_PX,
-    _ARENA_IFRAME_WIDTH_PX,
-    build_arena_html,
-)
+from ui.arena_view import render_arena as _render_arena  # type: ignore  # noqa: E402
 from ui.loading_indicator import loading_row  # type: ignore  # noqa: E402
 from ui.panel_hypothesis_final import (  # type: ignore  # noqa: E402
     StrategyUIPick,
@@ -678,39 +674,6 @@ def _render_game_over_callout(reason: Optional[str]) -> None:
     )
 
 
-def _render_arena(
-    last_round: Dict[str, Any],
-    game_over: bool,
-    duration_ms: int = 700,
-    hold_ms: int = 1200,
-    return_ms: int = 350,
-    action_nonce: int = 0,
-    *,
-    frame_id: int = 0,
-) -> None:
-    """Render the arena iframe (call inside ``with tab_arena:``).
-
-    Uses ``st.empty()`` so each auto-run rerun replaces one slot instead of stacking iframes.
-    """
-    html_s = build_arena_html(
-        last_round,
-        game_over,
-        duration_ms=duration_ms,
-        hold_ms=hold_ms,
-        return_ms=return_ms,
-        action_nonce=action_nonce,
-        frame_id=frame_id,
-    )
-    arena_slot = st.empty()
-    with arena_slot:
-        components.html(
-            html_s,
-            width=_ARENA_IFRAME_WIDTH_PX,
-            height=_ARENA_IFRAME_HEIGHT_PX,
-            scrolling=False,
-        )
-
-
 def _close_ui() -> None:
     """Closes the UI, in case of error or shutdown request."""
     # Best-effort: navigate away from Streamlit page first to avoid reconnect UI.
@@ -806,8 +769,8 @@ def _render_match_sidebar() -> MatchSidebarInput:
             _render_strategy_reference_list()
 
         st.divider()
-        # Read ``start_new`` before auto-init so ``_init_match`` is not invoked twice when ``match`` is
-        # None and **New game** is clicked (that path re-trained Q-learning and confused arena iframes).
+        # Read ``start_new`` before auto-init so ``_init_match`` does not run twice when ``match`` is
+        # None and **New game** is clicked on the same rerun (duplicate training / session churn).
         autorun = st.checkbox(
             "Auto-run to end",
             value=False,

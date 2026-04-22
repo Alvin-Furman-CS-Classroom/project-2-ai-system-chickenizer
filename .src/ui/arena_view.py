@@ -253,7 +253,22 @@ def render_arena(
     *,
     frame_id: int = 0,
 ) -> None:
-    """Render a simple HTML/CSS animated arena scene (direct ``components.html``)."""
+    """Draw the animated arena in the current Streamlit layout block.
+
+    Embeds ``build_arena_html`` via ``components.html``. The iframe is wrapped in
+    ``st.empty()`` so rapid full-app reruns (e.g. auto-run to end) replace one slot
+    instead of leaving a stale iframe under the active one.
+
+    Call from inside the intended parent (e.g. ``with tab_arena:``) so Streamlit’s
+    delta path matches the visible tab.
+
+    Args:
+        last_round: Last completed round actions/outcome for motion and labels.
+        game_over: Whether to show game-over styling on the outcome banner.
+        duration_ms, hold_ms, return_ms: Animation timing passed through to HTML/JS.
+        action_nonce: Bumps when a new round completes (same match).
+        frame_id: Increments on each new match; keeps DOM ids and keyframes unique.
+    """
     arena_html = build_arena_html(
         last_round,
         game_over,
