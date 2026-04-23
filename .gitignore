@@ -16,3 +16,7 @@ debug_reports/*.txt
 !debug_reports/.gitkeep
 .idea/
 .vscode/
+
+# Paper: build PDF locally; keeps pushes smaller and avoids LaTeX noise in diffs
+paper/main.pdf
+
