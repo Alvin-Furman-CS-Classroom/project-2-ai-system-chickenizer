@@ -1,0 +1,67 @@
+\section{Module Implementation Summary}
+
+Subsections follow the five-module course plan and point to real files under \texttt{.src/}. The README still mentions some \texttt{module2\_search.py}-style names that are not the main layout today.
+
+\subsection{Module 1: Strategy Logic Encoder and Knowledge Base}
+\textbf{Purpose.} Encode strategy and game rules as logic, convert to CNF, check consistency, and query consequences (forward/backward chaining).
+
+\textbf{Inputs / outputs.} SymPy boolean formulas (implications, legal-action constraints, collision structure) in; normalized KB, satisfiability and conflicts, entailed facts out~\cite{sympy}.
+
+\textbf{Design.} Logic lives in \texttt{module1\_kb.py} so later stages do not duplicate CNF work. Logging degrades quietly if the debug helper is missing.
+
+\textbf{Integration.} Feeds Module~2 and strategy objects the engine runs. Without a consistent KB, downstream search and Nash code would have to re-implement rule parsing.
+
+\subsection{Module 2: Optimal Strategy Combination Search}
+\textbf{Purpose.} Search over valid moves or short horizons to favor one player under bad opponent play, matching the course search topics.
+
+\textbf{Inputs / outputs.} Engine state, strategies, depth or similar settings in; chosen moves, traces or diagnostics, payoff-style scalars out.
+
+\textbf{Design.} There is no single \texttt{module2\_search.py}; search- and minimax-related code sits in \texttt{engine.py}, \texttt{strategies.py}, and helpers. Behavior is covered by tests even though filenames differ from the original table.
+
+\textbf{Integration.} \texttt{integration\_tests/module2/} ties Module~2 to Module~3 and Module~5. When search settings change, those tests are the early warning for broken cross-module numeric agreement.
+
+\subsection{Module 3: Nash Equilibrium Solver}
+\textbf{Purpose.} Nash equilibria of the induced normal form for the current state and preferences.
+
+\textbf{Inputs / outputs.} Two strategies, baseline state, action labels in; pure (and optional mixed) profiles, payoffs, best-response summaries out~\cite{nashpy,nash1950}.
+
+\textbf{Design.} Payoffs are resilience-based, not dollars; in-code comments explain why baseline shifts affect display but not pure Nash indices.
+
+\textbf{Integration.} Needs Module~1 strategies and the engine for payoffs. \texttt{integration\_tests/module3/} links to downstream analysis. If engine preferences change, Nash cells and UI coloring must move together---tests anchor that coupling.
+
+\subsection{Module 4: Chicken Game Engine and Simulation}
+\textbf{Purpose.} Run sequential Chicken with alternating moves and record a full trace.
+
+\textbf{Inputs / outputs.} Initial state, two strategies, match settings in; action history, payoffs/resilience paths, end reason out.
+
+\textbf{Design.} One \texttt{GameEngine} implements transitions so Nash and repeated tools see the same rules.
+
+\textbf{Integration.} Feeds Module~5; RL scripts can treat the engine as the environment. Any change to round resolution or resilience updates shows up immediately in both classroom demos and learning runs.
+
+\subsection{Module 5: Strategy Analysis and Comparison}
+\textbf{Purpose.} Combine search, Nash, and simulation outputs into tables, plots, and UI-ready data.
+
+\textbf{Inputs / outputs.} Repeated-analysis structs, Nash results, strategy names in; tables, matplotlib-based plots~\cite{matplotlib}, Streamlit/HTML snippets where used~\cite{streamlit}.
+
+\textbf{Design.} Prefer plain data types and functions testable without a browser.
+
+\textbf{Integration.} \texttt{integration\_tests/module5/} covers end-to-end flows.
+
+Table~\ref{tab:modmap} maps course module labels to primary files.
+
+\begin{table}[t]
+  \centering
+  \caption{Course module labels mapped to principal files in \texttt{.src/}.}
+  \label{tab:modmap}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Module (course label) & Primary implementation \\
+    \midrule
+    1 Logic / KB & \texttt{module1\_kb.py} \\
+    2 Search & \texttt{engine.py}, \texttt{strategies.py} (shared) \\
+    3 Nash & \texttt{nash\_normal\_form.py} \\
+    4 Simulation & \texttt{engine.py}, \texttt{match\_session.py} \\
+    5 Analysis & \texttt{nash\_repeated\_analysis.py}, \texttt{analysis\_payloads.py}, UI \\
+    \bottomrule
+  \end{tabular}
+\end{table}

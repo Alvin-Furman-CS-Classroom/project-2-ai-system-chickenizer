@@ -1,0 +1,39 @@
+%% Chickenizer CSC 343 term paper (single column, 11pt, numeric citations).
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{url}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+\title{Chickenizer: Integrating Logic, Equilibrium Analysis, Simulation, and Learning for Strategic Play in Chicken}
+\author{Greyson Henry\\Will Zoeller}
+\date{April 22, 2026}
+
+\begin{document}
+\maketitle
+{\small
+\setlength{\emergencystretch}{3em}
+\noindent\textbf{Repository:} \url{https://github.com/YOUR_ORG_OR_USERNAME/project-2-ai-system-chickenizer}\\
+\textbf{Demo:} If you run the Streamlit app locally, use \texttt{python -m streamlit run .src/ui/streamlit\_app.py} from the repo root, then open \url{http://127.0.0.1:8501} (default port). Replace the GitHub URL with your real remote; replace the demo line with a hosted URL or recording link if you submit one.
+\par\vspace{0.6em}}
+\pagestyle{plain}
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/architecture}
+\input{sections/modules}
+\input{sections/evaluation}
+\input{sections/results}
+\input{sections/proposal_delta}
+\input{sections/limitations}
+\input{sections/contributions}
+\input{sections/conclusions}
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+
+\end{document}

@@ -1,0 +1,49 @@
+\begin{thebibliography}{7}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Team(2024)]{sympy}
+SymPy~Development Team.
+\newblock {SymPy}: Python library for symbolic mathematics, 2024.
+\newblock URL \url{https://www.sympy.org/}.
+\newblock Accessed Apr.\ 2026.
+
+\bibitem[{Nashpy Developers}(2024)]{nashpy}
+{Nashpy Developers}.
+\newblock Nashpy: A library for the computation of equilibria of normal form games, 2024.
+\newblock URL \url{https://nashpy.readthedocs.io/}.
+\newblock Accessed Apr.\ 2026.
+
+\bibitem[Nash(1950)]{nash1950}
+John~F. Nash.
+\newblock Equilibrium points in {$n$}-person games.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 36\penalty0 (1):\penalty0 48--49, 1950.
+
+\bibitem[{Streamlit Inc.}(2024)]{streamlit}
+{Streamlit Inc.}
+\newblock Streamlit documentation, 2024.
+\newblock URL \url{https://docs.streamlit.io/}.
+\newblock Accessed Apr.\ 2026.
+
+\bibitem[Harris et~al.(2020)]{numpy}
+Charles~R. Harris et~al.
+\newblock Array programming with {NumPy}.
+\newblock \url{https://numpy.org/doc/stable/}, 2020.
+\newblock Accessed Apr.\ 2026.
+
+\bibitem[Hunter(2007)]{matplotlib}
+J.~D. Hunter.
+\newblock Matplotlib: A 2d graphics environment.
+\newblock \url{https://matplotlib.org/}, 2007.
+\newblock Accessed Apr.\ 2026.
+
+\bibitem[pytest Development~Team(2024)]{pytest}
+pytest Development~Team.
+\newblock pytest: helps you write better programs, 2024.
+\newblock URL \url{https://docs.pytest.org/}.
+\newblock Accessed Apr.\ 2026.
+
+\end{thebibliography}

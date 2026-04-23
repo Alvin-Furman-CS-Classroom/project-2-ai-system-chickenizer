@@ -1,0 +1,9 @@
+\section{Conclusions and Future Work}
+
+Chickenizer ties together a SymPy knowledge base~\cite{sympy}, a shared simulation engine, one-shot Nash analysis via Nashpy~\cite{nashpy,nash1950}, repeated-match summaries, analysis payloads, optional Streamlit~\cite{streamlit}, and small Q-learning benchmarks. On the evaluated snapshot, \texttt{pytest} reports 247 passing tests across unit and integration suites~\cite{pytest}.
+
+The best structural choice is one engine for both equilibrium and simulation tools, so comparisons stay apples-to-apples. The largest practical gap is documentation drift vs.\ real paths.
+
+\textbf{Next steps (rough priority).} (1)~Fix README/\texttt{.src/} mismatch (wrappers or doc-only rewrites with CI). (2)~If desired, add optional finite-horizon subgame-perfect tooling, clearly separate from the current induced matrix. (3)~For RL claims, log seeds and save CSVs from repeated runs. (4)~Short Streamlit usability pass if time. (5)~Automate a check that every README command exists.
+
+For a course setting, the durable artifact is not the PDF alone but the combination of runnable code, pinned libraries, and tests that a future reader can execute. Keeping those three aligned is the simplest way to stay inside the integrity rules while still telling an interesting story about Chicken.

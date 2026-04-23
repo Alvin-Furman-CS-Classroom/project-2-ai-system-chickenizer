@@ -1,0 +1,17 @@
+\section{Proposal Delta}
+
+The approved proposal described five modules with names like \texttt{module2\_search.py}--\texttt{module5\_analysis.py} under a normal \texttt{src/} tree. The shipped system keeps the same five ideas but differs in packaging and extras.
+
+\textbf{Layout.} Code runs from \texttt{.src/} (with a leading dot) and root bootstrap, not from the \texttt{src/} paths some README commands still show. Imports work when tests are configured, but copied shell commands can fail.
+
+\textbf{Module~2.} Search and minimax-style behavior live in \texttt{engine.py} and \texttt{strategies.py} instead of one \texttt{module2\_search.py}. Tests define the boundary; filenames are the main mismatch with the proposal table.
+
+\textbf{Streamlit UI.} The proposal discussed analysis and plots but did not require a browser app. We added Streamlit under \texttt{.src/ui/} for demos; that adds dependencies and paths to maintain.
+
+\textbf{Q-learning add-ons.} The original five modules were classical AI topics. The repo also has Q-learning training, tournaments, traces, and \texttt{integration\_tests/rl/}. These support comparisons with hand-written strategies but are extra relative to the core Nash/simulation story.
+
+\textbf{Repeated-game wording.} The proposal can read as promising full repeated-game Nash theory. \texttt{nash\_repeated\_analysis.py} instead implements simulated summaries over many rounds and states that in the file header---a smaller, testable scope.
+
+\textbf{Why change.} Shared engine code avoids two different ``physics'' for Nash vs.\ simulation; the UI helps classroom demos; repeated analysis stays honest about what it is. A thin \texttt{module2\_search.py} wrapper could reduce README drift later without changing behavior.
+
+\textbf{What we did not drop.} All five course topics still appear in running code and tests: logic in \texttt{module1\_kb.py}, search behavior in engine/strategies, Nash in \texttt{nash\_normal\_form.py}, simulation in the engine and session helpers, and analysis in repeated-analysis and payload modules plus UI. Optional RL files add scope rather than replacing those five roles.
