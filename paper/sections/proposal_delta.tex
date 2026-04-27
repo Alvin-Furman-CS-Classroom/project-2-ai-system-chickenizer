@@ -1,0 +1,17 @@
+\section{Proposal Delta}
+
+The approved proposal described five modules with names like \filepath{module2_search.py}--\filepath{module5_analysis.py} under a normal \filepath{src/} tree. The shipped system keeps the same five ideas but differs in packaging and extras.
+
+\textbf{Layout.} Code runs from \filepath{.src/} (with a leading dot) and root bootstrap, not from the \filepath{src/} paths some README commands still show. Imports work when tests are configured, but copied shell commands can fail.
+
+\textbf{Module~2.} Search and minimax-style behavior are implemented as shared logic in \filepath{engine.py} and \filepath{strategies.py}, rather than one standalone \filepath{module2_search.py}. Integration tests define and protect the effective boundary.
+
+\textbf{Streamlit UI.} The proposal discussed analysis and plots but did not require a browser app. We added Streamlit under \filepath{.src/ui/} for demos; that adds dependencies and paths to maintain.
+
+\textbf{Q-learning add-ons.} The original five modules were classical AI topics. The repo also has Q-learning training, tournaments, traces, and \filepath{integration_tests/rl/}. These support comparisons with hand-written strategies but are extra relative to the core Nash/simulation story.
+
+\textbf{Repeated-game wording.} The proposal can read as promising full repeated-game Nash theory. \filepath{nash_repeated_analysis.py} instead implements simulated summaries over many rounds and states that in the file header---a smaller, testable scope.
+
+\textbf{Why change.} Shared engine code avoids two different ``physics'' for Nash vs.\ simulation; the UI helps classroom demos; repeated analysis stays honest about what it is. A thin \filepath{module2_search.py} wrapper could reduce README drift later without changing behavior.
+
+\textbf{What we did not drop.} All five course topics still appear in running code and tests: logic in \filepath{module1_kb.py}, search behavior in engine/strategies, Nash in \filepath{nash_normal_form.py}, simulation in the engine and session helpers, and analysis in repeated-analysis and payload modules plus UI. Optional RL files add scope rather than replacing those five roles.

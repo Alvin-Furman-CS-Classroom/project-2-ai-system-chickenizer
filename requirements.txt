@@ -1,0 +1,19 @@
+# Chickenizer Project Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core logic and mathematics
+sympy>=1.12.0          # Boolean logic, implications, KB building
+numpy>=1.24.0          # Numerical operations and matrix handling
+
+# Game theory
+nashpy>=0.0.26         # Nash equilibrium computation
+
+# Visualization
+matplotlib>=3.7.0      # Plotting and visualization
+seaborn>=0.12.0        # Enhanced statistical visualizations
+
+# Testing
+pytest>=7.4.0          # Unit and integration testing
+
+# UI (dashboard)
+streamlit>=1.32.0      # Simple Python UI for demos

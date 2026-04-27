@@ -1,0 +1,13 @@
+\section{Evaluation Methodology}
+
+We rely on automated regression tests, not a single leaderboard score. The repo uses \texttt{pytest} with \filepath{pytest.ini} so imports from \filepath{.src/} work under different import modes~\cite{pytest}.
+
+\textbf{What we measure.} (1)~\textbf{Pass/fail:} full suite \filepath{python -m pytest unit_tests integration_tests -q}. (2)~\textbf{Coverage of concerns:} unit tests for KB, engine, Nash matrix code, repeated analysis, and RL smoke paths; integration tests for cross-module contracts (e.g.\ Module~2 vs.\ Module~3 on default states, Module~4 $\rightarrow$ Module~5, payload shape).
+
+Unit tests stay close to one file or one idea so a failure names a small surface area. Integration tests are fewer on purpose: they encode agreements between teams of files (same default payoff state, same action ordering, same keys in dicts passed toward analysis). When a feature spans modules, we prefer an integration test over a giant unit test with deep mocks, because mocks can hide real import or type mistakes.
+
+\textbf{How we collected results.} From the repo root we ran \filepath{python -m pytest unit_tests integration_tests -q}: 247 collected, 247 passed, 0 failed, on the machine used while writing. Table~\ref{tab:pytest} splits counts by folder using \filepath{python -m pytest --collect-only} per path. That table is the main quantitative result in this paper.
+
+\textbf{What this does not show.} Tests only cover written scenarios; they do not prove the spec is right for every Nashpy edge case or every random RL seed. Streamlit demos and benchmark plots are supporting material, not controlled experiments. Pinning versions in \filepath{requirements.txt} limits library drift but does not remove it.
+
+\textbf{Reproducing the numbers.} Clone the repository, install dependencies from \filepath{requirements.txt}, and run the same \filepath{python -m pytest} command from the repository root. Counts in Table~\ref{tab:pytest} should match \filepath{python -m pytest --collect-only} on each listed path; if they diverge after new tests are added, update the table and the prose here in the same commit so the paper stays tied to the branch you submit.

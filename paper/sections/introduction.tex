@@ -1,0 +1,11 @@
+\section{Introduction}
+
+The game of Chicken is used to reason about brinkmanship: mutual escalation is risky, backing down is safer but can look weak, and the order of moves can change what is credible. Chickenizer implements one concrete, testable version of that idea in software.
+
+The project grew from a course plan to combine five standard topics---propositional logic for strategies, search for good move combinations under adversarial play, Nash equilibrium for a normal form built from the engine, sequential simulation for many rounds, and analysis that compares those layers. The value for a reader is side-by-side outputs: the same strategies can be checked for logical consistency, summarized by equilibrium code, and then actually played in the engine so disagreements between theory layers are visible instead of hidden.
+
+\textbf{Scope.} The system lives mainly under \filepath{.src/}: a knowledge base for strategy rules, a turn-based game engine, Nash analysis on an induced $2\times 2$ matrix, repeated-match summaries, analysis payloads, an optional Streamlit UI, and optional Q-learning helpers. The five course modules (logic, search, Nash, simulation, analysis) still describe the design, but not every module name matches a single file in the README. Chickenizer does \emph{not} prove anything about real-world crises, fit real data, or compute subgame-perfect equilibria of the full repeated game. It \emph{does} provide runnable code, tests, and documented assumptions (for example, how one-shot Nash payoffs are built from resilience).
+
+This report maps the architecture (Figure~\ref{fig:arch}), lists where each module lives in code (Table~\ref{tab:modmap}), explains how we tested the system (\filepath{python -m pytest unit_tests integration_tests -q}), and gives results tied to that run plus one heatmap figure from the repo graphics folder. It also records what changed since the written proposal (\textbf{Proposal Delta}), what can go wrong (\textbf{Limitations and Failure Analysis}), and who did what (\textbf{Individual Contributions}).
+
+The writing stays close to the repository: file names, test commands, and counts you can re-run. Where we are uncertain (for example, how a plot was styled months ago), we say so instead of filling gaps with guessed numbers.

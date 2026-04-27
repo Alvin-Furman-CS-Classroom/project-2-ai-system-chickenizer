@@ -1,0 +1,9 @@
+\section{Limitations and Failure Analysis}
+
+\textbf{1. README vs.\ runnable tree.} The README still points at some \filepath{src/...} commands that do not match today's files, while developers use \filepath{.src/} and \filepath{python -m pytest}. Likely causes: refactors ahead of docs, and an unusual dotted folder name. \textbf{Effect:} wasted setup time or false ``project broken'' reports. \textbf{Mitigation:} add thin wrapper scripts at the documented paths, or rewrite README commands and CI-check them.
+
+\textbf{2. Nash layer is partial.} One-shot Nash uses a $2\times 2$ matrix from counterfactual resilience after one joint move from the current state. That can miss incentives that only show up over many rounds. Mixed Nash depends on Nashpy numerics we do not fully stress-test. \textbf{Failure mode:} readers treat UI colors as subgame-perfect advice. \textbf{Mitigation:} clearer UI labels, more integration tests on long-run action frequencies vs.\ static Nash where both are defined.
+
+\textbf{3. Tests vs.\ hostile code.} 247 passing tests still assume well-behaved strategies and fixtures. Malicious or sloppy code could mutate globals or skip the KB. \textbf{Mitigation:} stricter interfaces, property tests on small strategy algebras, light fuzzing on payoff inputs within bounds.
+
+Separately, any paper can lag the branch: if you merge new features after drafting, rerun \filepath{python -m pytest unit_tests integration_tests -q} and refresh counts before PDF export. The course expects you to report what actually ran, not what you plan to run later.

@@ -1,0 +1,40 @@
+\section{Results}
+
+\textbf{Strengths.} The full \texttt{pytest} run passed (247 tests). The distribution is intentionally skewed toward unit tests (239/247, about 97\%), which provides dense checks for local logic (KB transforms, engine transitions, resilience updates, and payoff helpers). The remaining integration tests (8/247, about 3\%) focus on cross-module contracts where regressions are most likely to break end-to-end behavior.
+
+\textbf{Weaknesses.} README filenames still diverge from the tree in places. Tests use hand-built fixtures, not external datasets. We did not run large hyperparameter sweeps or formal UI user studies. As a result, the strongest claim supported here is implementation reliability for tested paths, not statistical superiority of one strategy family over another.
+
+Table~\ref{tab:pytest} lists collection counts by area; every listed test passed in the aggregate run reported above. Practically, this means the module interfaces used by analysis and UI layers are stable on the evaluated snapshot, so interpretation in later sections rests on reproducible software behavior rather than one-off manual runs.
+
+\begin{table}[t]
+  \centering
+  \caption{Tests collected by area (snapshot, April 2026). All passed in the reported full-suite run.}
+  \label{tab:pytest}
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Area & Tests collected \\
+    \midrule
+    \filepath{unit_tests/} & 239 \\
+    \filepath{integration_tests/module2/} & 2 \\
+    \filepath{integration_tests/module3/} & 1 \\
+    \filepath{integration_tests/module4/} & 1 \\
+    \filepath{integration_tests/module5/} & 2 \\
+    \filepath{integration_tests/rl/} & 2 \\
+    \midrule
+    Total & 247 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Figure~\ref{fig:qlheat} shows the project's pairwise Q-learning heatmap (copied from \filepath{graphics/ql_pairwise_heatmap.png} into \filepath{paper/figures/} for a self-contained paper folder). The figure's main value in this paper is methodological: it confirms that the RL pipeline can produce structured pairwise comparisons suitable for downstream analysis and discussion. It is not used here as proof of globally optimal policies or real-world strategic dominance; axis and color meaning come from the script that generated the original asset.
+
+If your local clone shows a different total after pulling new commits, update Table~\ref{tab:pytest} and the sentence above to match; do not keep stale counts in the PDF.
+
+Reading Table~\ref{tab:pytest} together with the passing full-suite run supports two narrow claims: first, the low-level pieces (KB, engine, Nash helpers, repeated analysis, RL smoke) each have direct tests; second, a small but targeted set of integration tests guards the interfaces where regressions hurt most. In combination with Figure~\ref{fig:qlheat}, the results support a ``working analytics stack'' conclusion: logic, simulation, equilibrium analysis, and learning artifacts can be generated consistently from one codebase. It does \emph{not} support a claim that every feature in the Streamlit UI is exhaustively clicked in CI---only that the underlying Python contracts those screens rely on are exercised.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\linewidth]{figures/ql_pairwise_heatmap.png}
+  \caption{Pairwise Q-learning heatmap from the project \filepath{graphics/} bundle. Read axis labels and the generator script before citing numeric cells.}
+  \label{fig:qlheat}
+\end{figure}

@@ -1,18 +1,25 @@
-# [Your System Title]
+# Chickenizer
 
 ## Overview
 
-Provide a concise system overview (200-300 words). Explain the unifying theme and how the modules combine into a coherent AI system.
+Chickenizer is an AI system for analyzing the game of Chicken, a strategic interaction model where players choose between cooperation (swerve) and competition (stay). The system explores how sequential play, strategy specification, and optimal action combinations affect outcomes when players can commit to actions through turn-taking.
+
+The system integrates multiple AI techniques: propositional logic encodes strategy rules and game constraints into a knowledge base; search algorithms find optimal action combinations that maximize a player's outcomes under worst-case opponent behavior; game theory computes Nash equilibria to identify stable strategy pairs; and multi-agent simulation executes sequential games to observe actual outcomes.
+
+This theme suits AI exploration because it requires reasoning about strategic interactions, logical representation of rules and constraints, optimization under uncertainty, and equilibrium analysis. The sequential nature introduces commitment and information asymmetry, while strategy specification demands formal logical encoding. The system addresses cooperation incentives in high-stakes scenarios with potential for mutually negative outcomes, with applications to real-world situations like the ratcheting of political rhetoric.
+
+The five modules work together as follows: Module 1 (Strategy Logic Encoder) provides the foundational knowledge base and validated strategies for all subsequent modules. Module 2 (Optimal Strategy Search) uses these strategies to find best-case worst-case outcomes. Module 3 (Nash Equilibrium Solver) computes theoretical equilibria. Module 4 (Game Engine) simulates actual game play. Module 5 (Analysis & Comparison) synthesizes outputs from all modules to compare theoretical predictions with simulated reality.
 
 ## Team
 
-- Member 1
-- Member 2
-- Member 3 (if applicable)
+- Greyson Henry
+- Will Zoeller
 
 ## Proposal
 
-Link to the approved Project 1 proposal (or paste a short summary here).
+See [PROPOSAL.md](PROPOSAL.md) for the full project proposal.
+
+The proposal outlines Chickenizer as an AI system that analyzes the game of Chicken using propositional logic, search algorithms, game theory, and multi-agent simulation. The system consists of five modules that progressively build from logical strategy encoding to comprehensive analysis comparing theoretical predictions with simulated outcomes.
 
 ## Module Plan
 
@@ -20,11 +27,11 @@ Your system must include 5-6 modules. Fill in the table below as you plan each m
 
 | Module | Topic(s) | Inputs | Outputs | Depends On | Checkpoint |
 | ------ | -------- | ------ | ------- | ---------- | ---------- |
-| 1 |  |  |  |  |  |
-| 2 |  |  |  |  |  |
-| 3 |  |  |  |  |  |
-| 4 |  |  |  |  |  |
-| 5 |  |  |  |  |  |
+| 1 | Propositional Logic (Entailment, Knowledge Bases, Inference Methods, Chaining, CNF, Resolution) | User-defined strategy rules in logical form, action constraints, game rules | Knowledge base in CNF format, validated strategy representation, consistency check results, inferred logical consequences | None | 1 |
+| 2 | Search (A*, Uniform Cost, Constraint Satisfaction) | Game structure (payoff matrix, action space, turn order), strategy rules from Module 1, target player, search parameters | Optimal action combination, search path, cost/utility values | Module 1 | 2 |
+| 3 | Game theory (Nash equilibrium computation) | Validated strategy pair from Module 1, game structure, equilibrium type preference | Nash equilibria, equilibrium payoffs, optimal response functions, equilibrium existence proof | Module 1 | 3 |
+| 4 | Game theory (Sequential games, minimax, game simulation) | Payoff matrix, two strategies from Module 1, turn order, optional strategy parameters | Game outcome record (actions, payoffs, game state trace, turn sequence) | Module 1 | 4 |
+| 5 | Analysis techniques, visualization | Optimal combinations from Module 2, Nash equilibria from Module 3, game outcomes from Module 4, strategy metadata | Comparative analysis report, visualization data, insights summary | Modules 1, 2, 3, 4 | 5 |
 | 6 (optional) |  |  |  |  |  |
 
 ## Repository Layout
@@ -41,11 +48,90 @@ your-repo/
 
 ## Setup
 
-List dependencies, setup steps, and any environment variables required to run the system.
+### Prerequisites
+
+- Python 3.8 or higher
+- pip (Python package manager)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd project-2-ai-system-chickenizer
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Dependencies
+
+The system uses the following Python libraries:
+- **nashpy**: For Nash equilibrium computation
+- **sympy**: For Boolean logic, implications and directionality, KB building
+- **numpy**: For numerical operations and matrix handling
+- **matplotlib**: For visualization and plotting
+- **seaborn**: For enhanced statistical visualizations
+- **pytest**: For unit and integration testing
+
+### Environment Variables
+
+No environment variables are currently required. Configuration is handled through module parameters and input files.
 
 ## Running
 
-Provide commands or scripts for running modules and demos.
+### Running Individual Modules
+
+Each module can be run independently:
+
+```bash
+# Module 1: Strategy Logic Encoder & Knowledge Base
+python src/module1_kb.py
+
+# Module 2: Optimal Strategy Combination Search
+python src/module2_search.py
+
+# Module 3: Nash Equilibrium Solver
+python src/module3_equilibrium.py
+
+# Module 4: Chicken Game Engine & Simulation
+python src/module4_simulation.py
+
+# Module 5: Strategy Analysis & Comparison
+python src/module5_analysis.py
+```
+
+### Running Full System Demo
+
+To run a complete demonstration of all modules working together:
+
+```bash
+python src/main.py
+```
+
+### Example Usage
+
+```bash
+# Run with custom strategy rules
+python src/module1_kb.py --strategy-rules strategy_config.json
+
+# Run search with specific parameters
+python src/module2_search.py --target-player hero --depth-limit 10
+
+# Run simulation with custom payoff matrix
+python src/module4_simulation.py --payoff-matrix payoffs.json --turn-order hero
+```
+
+### UI (Streamlit)
+
+On Windows, `streamlit` may not be available as a bare command if your Python Scripts
+directory is not on `PATH`. This repo supports running Streamlit via Python directly:
+
+```bash
+python -m streamlit run .src/ui/streamlit_app.py
+```
 
 ## Testing
 
@@ -53,16 +139,50 @@ Provide commands or scripts for running modules and demos.
 
 **Integration Tests** (`integration_tests/`): Create a new subfolder for each module beyond the first, demonstrating how modules work together.
 
-Provide commands to run tests and describe any test data needed.
+### Running Tests
+
+Run all unit tests:
+```bash
+pytest unit_tests/
+```
+
+Run all integration tests:
+```bash
+pytest integration_tests/
+```
+
+Run tests for a specific module:
+```bash
+pytest unit_tests/test_module1.py
+pytest integration_tests/module2/
+```
+
+Run tests with verbose output:
+```bash
+pytest -v unit_tests/
+```
+
+### Test Data
+
+Test data is included in the test directories:
+- **Unit tests**: Each module has test fixtures and mock data in its corresponding test file
+- **Integration tests**: Each module integration test folder contains sample strategy configurations, payoff matrices, and expected outputs
+
+Example test data includes:
+- Sample strategy rules (logical formulas)
+- Payoff matrices for the Chicken game
+- Expected knowledge base outputs (CNF clauses)
+- Sample game outcomes and traces
 
 ## Checkpoint Log
 
 | Checkpoint | Date | Modules Included | Status | Evidence |
 | ---------- | ---- | ---------------- | ------ | -------- |
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
+| 1 | Wednesday, Feb 11 | Module 1 |  |  |
+| 2 | Thursday, Feb 26 | Module 2 |  |  |
+| 3 | Thursday, March 19 | Module 3 |  |  |
+| 4 | Thursday, April 2 | Module 4 |  |  |
+| 5 | Thursday, April 16 | Module 5 |  |  |
 
 ## Required Workflow (Agent-Guided)
 
@@ -80,4 +200,29 @@ Keep `AGENTS.md` updated with your module plan, constraints, and links to APIs/d
 
 ## References
 
-List libraries, APIs, datasets, and other references used by the system.
+### Libraries and Frameworks
+
+- **nashpy**: Nash equilibrium computation library for Python
+  - Documentation: https://nashpy.readthedocs.io/
+- **numpy**: Fundamental package for scientific computing with Python
+  - Documentation: https://numpy.org/doc/
+- **sympy**: Symbol objects for propositional logic
+  - Documentation: https://docs.sympy.org/
+- **matplotlib**: Comprehensive library for creating static, animated, and interactive visualizations
+  - Documentation: https://matplotlib.org/
+- **seaborn**: Statistical data visualization library built on matplotlib
+  - Documentation: https://seaborn.pydata.org/
+- **pytest**: Testing framework for Python
+  - Documentation: https://docs.pytest.org/
+
+### Course Materials
+
+- Project Instructions: https://csc-343.path.app/projects/project-2-ai-system/ai-system.project.md
+- Code Elegance Rubric: https://csc-343.path.app/rubrics/code-elegance.rubric.md
+- Course Schedule: https://csc-343.path.app/resources/course.schedule.md
+- Project Rubric: https://csc-343.path.app/projects/project-2-ai-system/ai-system.rubric.md
+
+### Game Theory References
+
+- Nash, J. F. (1950). Equilibrium points in n-person games. Proceedings of the National Academy of Sciences.
+- Game of Chicken: A classic game theory model of strategic interaction and cooperation
